@@ -1,0 +1,38 @@
+{
+  "name": "VapiConfig",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "title": "\u05de\u05d6\u05d4\u05d4 \u05dc\u05e7\u05d5\u05d7"
+    },
+    "vapi_api_key": {
+      "type": "string",
+      "title": "Vapi API Key"
+    },
+    "vapi_assistant_id": {
+      "type": "string",
+      "title": "Vapi Assistant ID"
+    },
+    "vapi_phone_number_id": {
+      "type": "string",
+      "title": "Vapi Phone Number ID"
+    },
+    "webhook_secret": {
+      "type": "string",
+      "title": "Webhook Secret"
+    },
+    "is_connected": {
+      "type": "boolean",
+      "title": "\u05de\u05d7\u05d5\u05d1\u05e8",
+      "default": false
+    },
+    "last_tested_at": {
+      "type": "string",
+      "title": "\u05d1\u05d3\u05d9\u05e7\u05d4 \u05d0\u05d7\u05e8\u05d5\u05e0\u05d4"
+    }
+  },
+  "required": [
+    "client_id"
+  ]
+}

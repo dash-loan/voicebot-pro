@@ -24,6 +24,9 @@ import Campaigns from './pages/Campaigns';
 import CampaignDetail from './pages/CampaignDetail';
 import CallResults from './pages/CallResults';
 import Analytics from './pages/Analytics';
+import AdminVapiSettings from './pages/AdminVapiSettings';
+import ClientVapiSettings from './pages/ClientVapiSettings';
+import VapiEvents from './pages/VapiEvents';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -69,6 +72,9 @@ const AuthenticatedApp = () => {
           <Route path="/campaigns/:campaignId" element={<CampaignDetail />} />
           <Route path="/results" element={<CallResults />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/admin/vapi" element={<AdminVapiSettings />} />
+          <Route path="/admin/vapi-events" element={<VapiEvents />} />
+          <Route path="/vapi-settings" element={<ClientVapiSettings />} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />
