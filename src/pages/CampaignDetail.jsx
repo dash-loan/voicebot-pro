@@ -5,6 +5,7 @@ import { base44 } from '@/api/base44Client';
 import StatsCard from '@/components/StatsCard';
 import { ArrowRight, Play, Pause, Square, Users, PhoneCall, UserCheck, Clock, Zap, Star } from 'lucide-react';
 import { deductMinutes } from '@/functions/deductMinutes';
+import { validateIsraeliMobile, formatIsraeliPhone } from '@/utils/phoneUtils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -145,6 +146,7 @@ export default function CampaignDetail() {
   const progressPercent = campaign.total_contacts > 0 ? ((campaign.dialed_contacts || 0) / campaign.total_contacts) * 100 : 0;
   const answerRate = (campaign.dialed_contacts || 0) > 0 ? Math.round(((campaign.answered_contacts || 0) / campaign.dialed_contacts) * 100) : 0;
   const pending = contacts.filter(c => c.status === 'pending').length;
+  const invalidPhones = contacts.filter(c => c.status === 'pending' && !validateIsraeliMobile(c.phone).valid);
   const statusLabels = { pending: 'ממתין', calling: 'בשיחה', answered: 'ענה', voicemail: 'תא קולי', no_answer: 'לא ענה', interested: 'מעוניין', not_interested: 'לא מעוניין' };
 
   return (
@@ -163,13 +165,25 @@ export default function CampaignDetail() {
         <div className="flex gap-2">
           {campaign.status !== 'completed' && (
             <>
+              {invalidPhones.length > 0 && campaign.status !== 'active' && (
+                <div className="text-xs text-destructive bg-destructive/10 px-3 py-1 rounded">
+                  ⚠️ {invalidPhones.length} מספרים לא תקינים
+                </div>
+              )}
               {campaign.status === 'active' ? (
                 <>
                   <Button variant="outline" onClick={() => updateStatus.mutate('paused')}><Pause className="w-4 h-4 ml-2" /> השהה</Button>
                   <Button variant="destructive" onClick={() => updateStatus.mutate('completed')}><Square className="w-4 h-4 ml-2" /> עצור</Button>
                 </>
               ) : (
-                <Button onClick={() => updateStatus.mutate('active')}><Play className="w-4 h-4 ml-2" /> הפעל</Button>
+                <Button
+                  onClick={() => {
+                    if (invalidPhones.length > 0) {
+                      toast({ title: `הפעלה חסומה – ${invalidPhones.length} מספרים בפורמט לא תקין`, variant: 'destructive' }); return;
+                    }
+                    updateStatus.mutate('active');
+                  }}
+                ><Play className="w-4 h-4 ml-2" /> הפעל</Button>
               )}
               <Button variant="outline" onClick={() => simulateCalls.mutate()} disabled={simulating || pending === 0}>
                 <Zap className="w-4 h-4 ml-2" /> {simulating ? 'מבצע...' : 'סימולציה'}
@@ -217,7 +231,7 @@ export default function CampaignDetail() {
                 {contacts.slice(0, 20).map(contact => (
                   <TableRow key={contact.id}>
                     <TableCell className="font-medium">{contact.name}</TableCell>
-                    <TableCell className="font-mono" dir="ltr">{contact.phone}</TableCell>
+                    <TableCell className="font-mono" dir="ltr">{formatIsraeliPhone(contact.phone)}</TableCell>
                     <TableCell>
                       <Badge variant={contact.status === 'interested' ? 'default' : contact.status === 'not_interested' ? 'destructive' : 'outline'}>
                         {statusLabels[contact.status]}

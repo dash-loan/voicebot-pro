@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/components/ui/use-toast';
+import { validateIsraeliMobile } from '@/utils/phoneUtils';
 
 const statusLabels = { draft: 'טיוטה', pending_vapi: 'בהכנה', active: 'פעיל', paused: 'עצור', completed: 'הושלם' };
 const statusColors = { active: 'default', completed: 'secondary', paused: 'outline', draft: 'outline', pending_vapi: 'outline' };
@@ -87,11 +88,7 @@ export default function Campaigns() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['myCampaigns'] }); toast({ title: 'הקמפיין נמחק' }); }
   });
 
-  const validateIsraeliPhone = (raw) => {
-    const cleaned = raw.replace(/[\s\-\(\)\.]/g, '');
-    if (/^0(5[012345689]|[234789])\d{7}$/.test(cleaned)) return cleaned;
-    return null;
-  };
+
 
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
@@ -100,30 +97,29 @@ export default function Campaigns() {
     reader.onload = (event) => {
       const text = event.target?.result;
       const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-      // Auto-detect header: skip first row if it contains שם / name / phone
       const hasHeader = /שם|name|phone|טלפון/i.test(lines[0]);
       const dataLines = hasHeader ? lines.slice(1) : lines;
 
       const seen = new Set();
-      let valid = [];
-      let invalidCount = 0;
-      let duplicateCount = 0;
+      const valid = [];
+      const rejected = [];
 
       for (const line of dataLines) {
         const parts = line.split(',').map(s => s.trim().replace(/"/g, ''));
         const name = parts[0] || 'לא ידוע';
         const rawPhone = parts[1] || parts[0];
         if (!rawPhone) continue;
-        const phone = validateIsraeliPhone(rawPhone);
-        if (!phone) { invalidCount++; continue; }
-        if (seen.has(phone)) { duplicateCount++; continue; }
-        seen.add(phone);
-        valid.push({ name, phone });
+        const result = validateIsraeliMobile(rawPhone);
+        if (!result.valid) { rejected.push({ name, phone: rawPhone, reason: result.reason }); continue; }
+        if (seen.has(result.normalized)) { rejected.push({ name, phone: rawPhone, reason: 'כפיל - כבר קיים ברשימה' }); continue; }
+        seen.add(result.normalized);
+        valid.push({ name, phone: result.normalized });
       }
 
-      setUploadPreview({ valid: valid.length, invalid: invalidCount, duplicates: duplicateCount });
+      setUploadPreview({ valid: valid.length, rejected });
       setContacts(valid);
-      if (valid.length > 0) toast({ title: `✅ ${valid.length} מספרים תקינים נטענו` });
+      if (valid.length > 0) toast({ title: `✅ ${valid.length} מספרים תקינים יובאו` });
+      else toast({ title: 'לא נמצאו מספרים תקינים', variant: 'destructive' });
     };
     reader.readAsText(file);
   };
@@ -175,17 +171,20 @@ export default function Campaigns() {
                 </div>
                 {uploadPreview && (
                   <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded">
-                      <span className="text-green-700 font-medium">✅ {uploadPreview.valid} מספרים תקינים</span>
+                    <div className="p-2 bg-green-50 border border-green-200 rounded text-green-700 font-medium">
+                      ✅ {uploadPreview.valid} מספרים תקינים יובאו
                     </div>
-                    {uploadPreview.invalid > 0 && (
-                      <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded">
-                        <span className="text-red-700">❌ {uploadPreview.invalid} מספרים לא תקינים (הוסרו)</span>
-                      </div>
-                    )}
-                    {uploadPreview.duplicates > 0 && (
-                      <div className="flex items-center gap-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
-                        <span className="text-yellow-700">⚠️ {uploadPreview.duplicates} כפולים (הוסרו)</span>
+                    {uploadPreview.rejected.length > 0 && (
+                      <div className="border border-red-200 rounded overflow-hidden">
+                        <div className="p-2 bg-red-50 text-red-700 font-medium">❌ {uploadPreview.rejected.length} נדחו:</div>
+                        <div className="max-h-32 overflow-y-auto">
+                          {uploadPreview.rejected.map((r, i) => (
+                            <div key={i} className="px-3 py-1.5 text-xs border-t border-red-100 flex justify-between">
+                              <span className="text-muted-foreground" dir="ltr">{r.phone}</span>
+                              <span className="text-red-600">{r.reason}</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>

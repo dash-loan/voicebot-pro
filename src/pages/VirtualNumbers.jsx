@@ -12,12 +12,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/components/ui/use-toast';
+import { validateIsraeliMobile, formatIsraeliPhone } from '@/utils/phoneUtils';
 
 export default function VirtualNumbers() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState({ phone_number: '', provider: 'Twilio', status: 'active' });
+  const [phoneError, setPhoneError] = useState('');
+
+  const handlePhoneChange = (val) => {
+    setForm(f => ({ ...f, phone_number: val }));
+    if (!val) { setPhoneError(''); return; }
+    const result = validateIsraeliMobile(val);
+    setPhoneError(result.valid ? '' : result.reason);
+  };
 
   const { data: numbers = [], isLoading } = useQuery({
     queryKey: ['virtualNumbers'],
@@ -77,7 +86,15 @@ export default function VirtualNumbers() {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label>מספר טלפון</Label>
-                <Input value={form.phone_number} onChange={e => setForm({ ...form, phone_number: e.target.value })} placeholder="03-1234567" dir="ltr" />
+                <Input
+                  value={form.phone_number}
+                  onChange={e => handlePhoneChange(e.target.value)}
+                  placeholder="+972501234567"
+                  dir="ltr"
+                  className={phoneError ? 'border-destructive focus-visible:ring-destructive' : ''}
+                />
+                {phoneError && <p className="text-xs text-destructive">{phoneError}</p>}
+                {!phoneError && form.phone_number && <p className="text-xs text-green-600">✅ פורמט תקין</p>}
               </div>
               <div className="space-y-2">
                 <Label>ספק</Label>
@@ -93,7 +110,14 @@ export default function VirtualNumbers() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>ביטול</Button>
-              <Button onClick={() => createNumber.mutate(form)} disabled={!form.phone_number}>הוסף</Button>
+              <Button
+                onClick={() => {
+                  const result = validateIsraeliMobile(form.phone_number);
+                  if (!result.valid) { setPhoneError(result.reason); return; }
+                  createNumber.mutate({ ...form, phone_number: result.normalized });
+                }}
+                disabled={!form.phone_number || !!phoneError}
+              >הוסף</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -122,7 +146,7 @@ export default function VirtualNumbers() {
               <TableBody>
                 {numbers.map(num => (
                   <TableRow key={num.id}>
-                    <TableCell className="font-mono font-medium" dir="ltr">{num.phone_number}</TableCell>
+                    <TableCell className="font-mono font-medium" dir="ltr">{formatIsraeliPhone(num.phone_number)}</TableCell>
                     <TableCell>{num.provider}</TableCell>
                     <TableCell>
                       <Badge variant={num.status === 'active' ? 'default' : 'secondary'} className="cursor-pointer" onClick={() => toggleStatus.mutate(num)}>

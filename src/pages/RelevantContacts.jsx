@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { format } from 'date-fns';
 import { he } from 'date-fns/locale';
 import TranscriptViewer from '@/components/TranscriptViewer';
+import { formatIsraeliPhone } from '@/utils/phoneUtils';
 
 const STATUS = {
   interested: { label: 'מעוניין', color: 'default' },
@@ -149,7 +150,7 @@ export default function RelevantContacts() {
                 {filtered.slice(0, 100).map(log => (
                   <TableRow key={log.id} className={log.status === 'interested' ? 'bg-green-50/50' : ''}>
                     <TableCell className="font-medium">{log.contact_name || '-'}</TableCell>
-                    <TableCell className="font-mono" dir="ltr">{log.contact_phone || '-'}</TableCell>
+                    <TableCell className="font-mono" dir="ltr">{log.contact_phone ? formatIsraeliPhone(log.contact_phone) : '-'}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{log.campaign_name || '-'}</TableCell>
                     <TableCell><Badge variant={STATUS[log.status]?.color}>{STATUS[log.status]?.label || log.status}</Badge></TableCell>
                     <TableCell>{log.duration ? `${Math.floor(log.duration / 60)}:${String(log.duration % 60).padStart(2, '0')}` : '-'}</TableCell>
