@@ -24,9 +24,12 @@ import Campaigns from './pages/Campaigns';
 import CampaignDetail from './pages/CampaignDetail';
 import CallResults from './pages/CallResults';
 import Analytics from './pages/Analytics';
-import AdminVapiSettings from './pages/AdminVapiSettings';
-import ClientVapiSettings from './pages/ClientVapiSettings';
 import VapiEvents from './pages/VapiEvents';
+import AdminRoute from './components/AdminRoute';
+import Profitability from './pages/admin/Profitability';
+import AllCampaigns from './pages/admin/AllCampaigns';
+import SystemSettings from './pages/admin/SystemSettings';
+import RelevantContacts from './pages/RelevantContacts';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -61,20 +64,23 @@ const AuthenticatedApp = () => {
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<Layout />}>
           <Route path="/" element={<Home />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/clients" element={<ClientManagement />} />
-          <Route path="/admin/scripts" element={<ScriptList />} />
-          <Route path="/admin/scripts/:scriptId" element={<ScriptBuilder />} />
-          <Route path="/admin/tts" element={<TTSBuilder />} />
-          <Route path="/admin/numbers" element={<VirtualNumbers />} />
           <Route path="/dashboard" element={<ClientDashboard />} />
           <Route path="/campaigns" element={<Campaigns />} />
           <Route path="/campaigns/:campaignId" element={<CampaignDetail />} />
-          <Route path="/results" element={<CallResults />} />
+          <Route path="/results" element={<RelevantContacts />} />
           <Route path="/analytics" element={<Analytics />} />
-          <Route path="/admin/vapi" element={<AdminVapiSettings />} />
-          <Route path="/admin/vapi-events" element={<VapiEvents />} />
-          <Route path="/vapi-settings" element={<ClientVapiSettings />} />
+          <Route element={<AdminRoute />}>
+            <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/admin/clients" element={<ClientManagement />} />
+            <Route path="/admin/campaigns" element={<AllCampaigns />} />
+            <Route path="/admin/scripts" element={<ScriptList />} />
+            <Route path="/admin/scripts/:scriptId" element={<ScriptBuilder />} />
+            <Route path="/admin/tts" element={<TTSBuilder />} />
+            <Route path="/admin/numbers" element={<VirtualNumbers />} />
+            <Route path="/admin/profitability" element={<Profitability />} />
+            <Route path="/admin/vapi-events" element={<VapiEvents />} />
+            <Route path="/admin/settings" element={<SystemSettings />} />
+          </Route>
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />

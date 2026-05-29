@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
 import StatsCard from '@/components/StatsCard';
-import { Users, Clock, PhoneCall, TrendingUp, ArrowLeft, FileText, Mic, Phone } from 'lucide-react';
+import { Users, Clock, PhoneCall, TrendingUp, ArrowLeft, FileText, Mic, Phone, DollarSign } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -28,10 +28,18 @@ export default function AdminDashboard() {
     queryFn: () => base44.entities.Script.list()
   });
 
+  const { data: callLogs = [] } = useQuery({
+    queryKey: ['allCallLogs'],
+    queryFn: () => base44.entities.CallLog.list()
+  });
+
   const totalMinutes = clientMinutes.reduce((sum, cm) => sum + (cm.total_minutes || 0), 0);
   const usedMinutes = clientMinutes.reduce((sum, cm) => sum + (cm.used_minutes || 0), 0);
   const activeClients = users.filter(u => u.status === 'active').length;
   const activeCampaigns = campaigns.filter(c => c.status === 'active').length;
+  const totalRevenue = usedMinutes * 0.25;
+  const totalCost = callLogs.reduce((s, l) => s + (l.vapi_cost || 0), 0) + (callLogs.reduce((s, l) => s + (l.active_duration_seconds || l.duration || 0), 0) / 60) * 0.013;
+  const totalProfit = totalRevenue - totalCost;
 
   const recentClients = users.slice(0, 5);
 
@@ -47,6 +55,7 @@ export default function AdminDashboard() {
         <StatsCard title="דקות שהוקצו" value={totalMinutes.toLocaleString()} subtitle={`${usedMinutes.toLocaleString()} נוצלו`} icon={Clock} color="gold" />
         <StatsCard title="קמפיינים פעילים" value={activeCampaigns} subtitle={`מתוך ${campaigns.length}`} icon={PhoneCall} />
         <StatsCard title="תסריטים" value={scripts.length} subtitle={`${scripts.filter(s => s.status === 'active').length} פעילים`} icon={FileText} />
+        <StatsCard title="רווח נקי החודש" value={`$${totalProfit.toFixed(0)}`} subtitle={`הכנסות $${totalRevenue.toFixed(0)}`} icon={DollarSign} color="gold" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -116,6 +125,12 @@ export default function AdminDashboard() {
               <Button variant="outline" className="w-full justify-start gap-3">
                 <Phone className="w-5 h-5" />
                 נהל מספרים
+              </Button>
+            </Link>
+            <Link to="/admin/profitability" className="block">
+              <Button variant="outline" className="w-full justify-start gap-3">
+                <TrendingUp className="w-5 h-5" />
+                דוח רווחיות
               </Button>
             </Link>
           </CardContent>

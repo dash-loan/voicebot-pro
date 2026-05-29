@@ -2,25 +2,26 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useState } from 'react';
-import { LayoutDashboard, Users, FileText, Mic, Phone, Megaphone, BarChart3, List, LogOut, Menu, Bot, Zap, Activity, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Mic, Phone, Megaphone, BarChart3, List, LogOut, Menu, Bot, Zap, Activity, TrendingUp, Settings, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const adminLinks = [
   { to: '/admin', icon: LayoutDashboard, label: 'דשבורד' },
   { to: '/admin/clients', icon: Users, label: 'ניהול לקוחות' },
+  { to: '/admin/campaigns', icon: Megaphone, label: 'כל הקמפיינים' },
   { to: '/admin/scripts', icon: FileText, label: 'תסריטים' },
   { to: '/admin/tts', icon: Mic, label: 'בונה קול' },
-  { to: '/admin/numbers', icon: Phone, label: 'מספרים וירטואליים' },
-  { to: '/admin/vapi', icon: Zap, label: 'חיבור Vapi' },
-  { to: '/admin/vapi-events', icon: Activity, label: 'אירועי Vapi' },
+  { to: '/admin/numbers', icon: Phone, label: 'מספרים' },
+  { to: '/admin/profitability', icon: TrendingUp, label: 'רווחיות' },
+  { to: '/admin/vapi-events', icon: Activity, label: 'לוג מערכת' },
+  { to: '/admin/settings', icon: Settings, label: 'הגדרות מערכת' },
 ];
 
 const clientLinks = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'דשבורד' },
   { to: '/campaigns', icon: Megaphone, label: 'קמפיינים' },
-  { to: '/results', icon: List, label: 'תוצאות שיחות' },
+  { to: '/results', icon: Star, label: 'לקוחות רלוונטיים' },
   { to: '/analytics', icon: BarChart3, label: 'אנליטיקה' },
-  { to: '/vapi-settings', icon: Settings, label: 'הגדרות Vapi' },
 ];
 
 export default function Layout() {

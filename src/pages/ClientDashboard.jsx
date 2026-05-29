@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
 import StatsCard from '@/components/StatsCard';
-import { Clock, PhoneCall, UserCheck, UserX, ArrowLeft, Megaphone } from 'lucide-react';
+import { Clock, PhoneCall, UserCheck, UserX, ArrowLeft, Megaphone, Upload, Star } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -65,18 +65,19 @@ export default function ClientDashboard() {
               </div>
               <div className="flex items-baseline gap-2 mb-3">
                 <span className="text-4xl font-bold">{remainingMinutes.toLocaleString()}</span>
-                <span className="text-muted-foreground">/ {totalMinutes.toLocaleString()} דקות</span>
+                <span className="text-muted-foreground">/ {totalMinutes.toLocaleString()} דקות נותרו</span>
               </div>
               <Progress value={usagePercent} className="h-3" />
-              <p className="text-sm text-muted-foreground mt-2">{usedMinutes.toLocaleString()} דקות נוצלו ({Math.round(usagePercent)}%)</p>
+              <p className="text-sm text-muted-foreground mt-2">{usedMinutes.toLocaleString()} דקות שנוצלו ({Math.round(usagePercent)}%)</p>
             </div>
-            <div className="flex flex-col items-center md:items-end gap-2">
-              {remainingMinutes < 100 && remainingMinutes > 0 && (
-                <Badge variant="destructive">דקות מתמעטות!</Badge>
-              )}
-              {remainingMinutes === 0 && (
-                <Badge variant="destructive">נגמרו הדקות</Badge>
-              )}
+            <div className="flex flex-col gap-2">
+              {remainingMinutes < 100 && remainingMinutes > 0 && <Badge variant="destructive">דקות מתמעטות!</Badge>}
+              {remainingMinutes === 0 && <Badge variant="destructive">נגמרו הדקות</Badge>}
+              <Link to="/campaigns">
+                <Button className="gap-2 w-full">
+                  <Upload className="w-4 h-4" /> העלה רשימת לקוחות
+                </Button>
+              </Link>
             </div>
           </div>
         </CardContent>
@@ -85,7 +86,7 @@ export default function ClientDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatsCard title="סה״כ שיחות" value={totalCalls} icon={PhoneCall} />
         <StatsCard title="אחוז מענה" value={`${answerRate}%`} subtitle={`${answeredCalls} ענו`} icon={UserCheck} color="gold" />
-        <StatsCard title="אחוז מעוניינים" value={`${interestRate}%`} subtitle={`${interestedCalls} מעוניינים`} icon={UserCheck} />
+        <StatsCard title="מעוניינים" value={interestedCalls} subtitle={`${interestRate}% מהמענים`} icon={Star} />
         <StatsCard title="לא מעוניינים" value={notInterestedCalls} icon={UserX} />
       </div>
 
@@ -93,18 +94,14 @@ export default function ClientDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>קמפיינים פעילים</CardTitle>
-            <Link to="/campaigns">
-              <Button variant="ghost" size="sm" className="gap-2">
-                כל הקמפיינים <ArrowLeft className="w-4 h-4" />
-              </Button>
-            </Link>
+            <Link to="/campaigns"><Button variant="ghost" size="sm" className="gap-2">כל הקמפיינים <ArrowLeft className="w-4 h-4" /></Button></Link>
           </CardHeader>
           <CardContent>
             {activeCampaigns.length === 0 ? (
               <div className="text-center py-8">
                 <Megaphone className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                 <p className="text-muted-foreground">אין קמפיינים פעילים</p>
-                <Link to="/campaigns"><Button className="mt-4">צור קמפיין ראשון</Button></Link>
+                <Link to="/campaigns"><Button className="mt-4 gap-2"><Upload className="w-4 h-4" /> צור קמפיין חדש</Button></Link>
               </div>
             ) : (
               <div className="space-y-3">
@@ -113,7 +110,7 @@ export default function ClientDashboard() {
                     <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
                       <div>
                         <p className="font-medium">{campaign.name}</p>
-                        <p className="text-sm text-muted-foreground">{campaign.dialed_contacts || 0} / {campaign.total_contacts || 0} חויגו</p>
+                        <p className="text-sm text-muted-foreground">{campaign.dialed_contacts || 0} / {campaign.total_contacts || 0} שיחות</p>
                       </div>
                       <Badge>פעיל</Badge>
                     </div>
@@ -125,25 +122,18 @@ export default function ClientDashboard() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>קמפיינים אחרונים</CardTitle></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>לקוחות מעוניינים אחרונים</CardTitle>
+            <Link to="/results"><Button variant="ghost" size="sm" className="gap-2">כל התוצאות <ArrowLeft className="w-4 h-4" /></Button></Link>
+          </CardHeader>
           <CardContent>
-            {recentCampaigns.length === 0 ? (
-              <p className="text-center py-8 text-muted-foreground">אין קמפיינים עדיין</p>
+            {interestedCalls === 0 ? (
+              <p className="text-center py-8 text-muted-foreground">אין מעוניינים עדיין</p>
             ) : (
-              <div className="space-y-3">
-                {recentCampaigns.map(campaign => (
-                  <Link key={campaign.id} to={`/campaigns/${campaign.id}`} className="block">
-                    <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                      <div>
-                        <p className="font-medium">{campaign.name}</p>
-                        <p className="text-sm text-muted-foreground">{campaign.answered_contacts || 0} מענים</p>
-                      </div>
-                      <Badge variant={campaign.status === 'active' ? 'default' : campaign.status === 'completed' ? 'secondary' : 'outline'}>
-                        {campaign.status === 'active' ? 'פעיל' : campaign.status === 'completed' ? 'הושלם' : campaign.status === 'paused' ? 'מושהה' : 'טיוטה'}
-                      </Badge>
-                    </div>
-                  </Link>
-                ))}
+              <div className="p-4 bg-green-50 rounded-lg text-center">
+                <p className="text-4xl font-bold text-green-700">{interestedCalls}</p>
+                <p className="text-green-600 mt-1">לקוחות מעוניינים</p>
+                <Link to="/results?status=interested"><Button variant="outline" className="mt-3 gap-2 border-green-300 text-green-700 hover:bg-green-100"><Star className="w-4 h-4" /> הורד רשימה</Button></Link>
               </div>
             )}
           </CardContent>

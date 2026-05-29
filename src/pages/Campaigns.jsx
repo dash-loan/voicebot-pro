@@ -15,6 +15,9 @@ import { Slider } from '@/components/ui/slider';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/components/ui/use-toast';
 
+const statusLabels = { draft: 'טיוטה', pending_vapi: 'בהכנה', active: 'פעיל', paused: 'עצור', completed: 'הושלם' };
+const statusColors = { active: 'default', completed: 'secondary', paused: 'outline', draft: 'outline', pending_vapi: 'outline' };
+
 export default function Campaigns() {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -22,11 +25,7 @@ export default function Campaigns() {
   const fileInputRef = useRef(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ 
-    name: '', script_id: '', virtual_number_id: '', 
-    dialing_start: '09:00', dialing_end: '20:00', 
-    max_concurrent: 5, max_retries: 2 
-  });
+  const [form, setForm] = useState({ name: '', script_id: '', dialing_start: '09:00', dialing_end: '20:00', max_concurrent: 5, max_retries: 2 });
   const [contacts, setContacts] = useState([]);
 
   const { data: user } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
@@ -41,11 +40,6 @@ export default function Campaigns() {
     queryKey: ['myScripts', user?.id],
     queryFn: () => base44.entities.Script.filter({ assigned_client_id: user?.id, status: 'active' }),
     enabled: !!user?.id
-  });
-
-  const { data: numbers = [] } = useQuery({
-    queryKey: ['availableNumbers'],
-    queryFn: () => base44.entities.VirtualNumber.filter({ status: 'active' })
   });
 
   const createCampaign = useMutation({
@@ -69,7 +63,7 @@ export default function Campaigns() {
       queryClient.invalidateQueries({ queryKey: ['myCampaigns'] });
       setDialogOpen(false);
       setStep(1);
-      setForm({ name: '', script_id: '', virtual_number_id: '', dialing_start: '09:00', dialing_end: '20:00', max_concurrent: 5, max_retries: 2 });
+      setForm({ name: '', script_id: '', dialing_start: '09:00', dialing_end: '20:00', max_concurrent: 5, max_retries: 2 });
       setContacts([]);
       toast({ title: 'הקמפיין נוצר בהצלחה' });
       navigate(`/campaigns/${campaign.id}`);
@@ -77,14 +71,10 @@ export default function Campaigns() {
   });
 
   const toggleCampaign = useMutation({
-    mutationFn: async (campaign) => {
-      const newStatus = campaign.status === 'active' ? 'paused' : 'active';
-      await base44.entities.Campaign.update(campaign.id, { status: newStatus });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['myCampaigns'] });
-      toast({ title: 'סטטוס הקמפיין עודכן' });
-    }
+    mutationFn: (campaign) => base44.entities.Campaign.update(campaign.id, {
+      status: campaign.status === 'active' ? 'paused' : 'active'
+    }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['myCampaigns'] }); toast({ title: 'סטטוס עודכן' }); }
   });
 
   const deleteCampaign = useMutation({
@@ -93,10 +83,7 @@ export default function Campaigns() {
       for (const c of campaignContacts) await base44.entities.Contact.delete(c.id);
       await base44.entities.Campaign.delete(id);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['myCampaigns'] });
-      toast({ title: 'הקמפיין נמחק' });
-    }
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['myCampaigns'] }); toast({ title: 'הקמפיין נמחק' }); }
   });
 
   const handleFileUpload = (e) => {
@@ -116,8 +103,6 @@ export default function Campaigns() {
     reader.readAsText(file);
   };
 
-  const statusLabels = { draft: 'טיוטה', active: 'פעיל', paused: 'מושהה', completed: 'הושלם' };
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -131,9 +116,10 @@ export default function Campaigns() {
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>קמפיין חדש - שלב {step}/3</DialogTitle>
-              <DialogDescription>{step === 1 ? 'פרטי הקמפיין' : step === 2 ? 'העלאת אנשי קשר' : 'הגדרות חיוג'}</DialogDescription>
+              <DialogTitle>קמפיין חדש – שלב {step}/3</DialogTitle>
+              <DialogDescription>{step === 1 ? 'פרטי הקמפיין' : step === 2 ? 'העלאת רשימת לקוחות' : 'הגדרות חיוג'}</DialogDescription>
             </DialogHeader>
+
             {step === 1 && (
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -150,33 +136,30 @@ export default function Campaigns() {
                   </Select>
                   {scripts.length === 0 && <p className="text-xs text-muted-foreground">אין תסריטים זמינים. פנה למנהל המערכת.</p>}
                 </div>
-                <div className="space-y-2">
-                  <Label>מספר וירטואלי</Label>
-                  <Select value={form.virtual_number_id} onValueChange={v => setForm({ ...form, virtual_number_id: v })}>
-                    <SelectTrigger><SelectValue placeholder="בחר מספר" /></SelectTrigger>
-                    <SelectContent>
-                      {numbers.map(n => <SelectItem key={n.id} value={n.id}>{n.phone_number}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
             )}
+
             {step === 2 && (
               <div className="space-y-4 py-4">
                 <div className="border-2 border-dashed rounded-lg p-8 text-center">
                   <Upload className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground mb-4">העלה קובץ CSV עם עמודות: שם, טלפון</p>
-                  <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+                  <p className="text-muted-foreground mb-2 font-medium">העלה קובץ CSV / Excel</p>
+                  <p className="text-sm text-muted-foreground mb-4">עמודות: שם, טלפון</p>
+                  <input type="file" accept=".csv,.xlsx" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
                   <Button variant="outline" onClick={() => fileInputRef.current?.click()}>בחר קובץ</Button>
                 </div>
                 {contacts.length > 0 && (
-                  <div className="bg-muted p-4 rounded-lg">
-                    <p className="font-medium">{contacts.length} אנשי קשר נטענו</p>
-                    <p className="text-sm text-muted-foreground mt-1">דוגמה: {contacts[0]?.name} - {contacts[0]?.phone}</p>
+                  <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                    <p className="font-medium text-green-800">{contacts.length} אנשי קשר נטענו בהצלחה</p>
+                    <p className="text-sm text-green-600 mt-1">דוגמה: {contacts[0]?.name} – {contacts[0]?.phone}</p>
                   </div>
+                )}
+                {contacts.length === 0 && (
+                  <p className="text-center text-sm text-muted-foreground">ניתן להמשיך ללא רשימה ולהוסיף אנשי קשר מאוחר יותר</p>
                 )}
               </div>
             )}
+
             {step === 3 && (
               <div className="space-y-4 py-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -199,12 +182,15 @@ export default function Campaigns() {
                 </div>
               </div>
             )}
+
             <DialogFooter className="gap-2">
               {step > 1 && <Button variant="outline" onClick={() => setStep(step - 1)}>הקודם</Button>}
               {step < 3 ? (
-                <Button onClick={() => setStep(step + 1)} disabled={step === 1 && (!form.name || !form.script_id)}>הבא</Button>
+                <Button onClick={() => setStep(step + 1)} disabled={step === 1 && !form.name}>הבא</Button>
               ) : (
-                <Button onClick={() => createCampaign.mutate()} disabled={createCampaign.isPending}>{createCampaign.isPending ? 'יוצר...' : 'צור קמפיין'}</Button>
+                <Button onClick={() => createCampaign.mutate()} disabled={createCampaign.isPending}>
+                  {createCampaign.isPending ? 'יוצר...' : '🚀 הפעל קמפיין'}
+                </Button>
               )}
             </DialogFooter>
           </DialogContent>
@@ -238,9 +224,7 @@ export default function Campaigns() {
                   <TableRow key={campaign.id}>
                     <TableCell className="font-medium">{campaign.name}</TableCell>
                     <TableCell>
-                      <Badge variant={campaign.status === 'active' ? 'default' : campaign.status === 'completed' ? 'secondary' : 'outline'}>
-                        {statusLabels[campaign.status]}
-                      </Badge>
+                      <Badge variant={statusColors[campaign.status]}>{statusLabels[campaign.status]}</Badge>
                     </TableCell>
                     <TableCell>{campaign.total_contacts || 0}</TableCell>
                     <TableCell>{campaign.dialed_contacts || 0}</TableCell>
