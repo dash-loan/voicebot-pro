@@ -1,0 +1,51 @@
+{
+  "name": "Contact",
+  "type": "object",
+  "properties": {
+    "campaign_id": {
+      "type": "string",
+      "title": "\u05e7\u05de\u05e4\u05d9\u05d9\u05df"
+    },
+    "name": {
+      "type": "string",
+      "title": "\u05e9\u05dd"
+    },
+    "phone": {
+      "type": "string",
+      "title": "\u05d8\u05dc\u05e4\u05d5\u05df"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "calling",
+        "answered",
+        "voicemail",
+        "no_answer",
+        "interested",
+        "not_interested"
+      ],
+      "default": "pending",
+      "title": "\u05e1\u05d8\u05d8\u05d5\u05e1"
+    },
+    "attempts": {
+      "type": "number",
+      "title": "\u05e0\u05d9\u05e1\u05d9\u05d5\u05e0\u05d5\u05ea",
+      "default": 0
+    },
+    "last_attempt": {
+      "type": "string",
+      "title": "\u05e0\u05d9\u05e1\u05d9\u05d5\u05df \u05d0\u05d7\u05e8\u05d5\u05df"
+    },
+    "duration": {
+      "type": "number",
+      "title": "\u05de\u05e9\u05da (\u05e9\u05e0\u05d9\u05d5\u05ea)",
+      "default": 0
+    }
+  },
+  "required": [
+    "campaign_id",
+    "name",
+    "phone"
+  ]
+}

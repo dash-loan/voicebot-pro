@@ -1,0 +1,53 @@
+{
+  "name": "ScriptNode",
+  "type": "object",
+  "properties": {
+    "script_id": {
+      "type": "string",
+      "title": "\u05de\u05d6\u05d4\u05d4 \u05ea\u05e1\u05e8\u05d9\u05d8"
+    },
+    "node_label": {
+      "type": "string",
+      "title": "\u05ea\u05d5\u05d5\u05d9\u05ea \u05e6\u05d5\u05de\u05ea"
+    },
+    "text": {
+      "type": "string",
+      "title": "\u05d8\u05e7\u05e1\u05d8 \u05e9\u05d0\u05dc\u05d4/\u05d4\u05e6\u05d4\u05e8\u05d4"
+    },
+    "audio_asset_id": {
+      "type": "string",
+      "title": "\u05e7\u05d5\u05d1\u05e5 \u05e9\u05de\u05e2"
+    },
+    "yes_next": {
+      "type": "string",
+      "title": "\u05db\u05df \u2192 \u05e6\u05d5\u05de\u05ea \u05d4\u05d1\u05d0"
+    },
+    "no_next": {
+      "type": "string",
+      "title": "\u05dc\u05d0 \u2192 \u05e6\u05d5\u05de\u05ea \u05d4\u05d1\u05d0"
+    },
+    "no_answer_next": {
+      "type": "string",
+      "title": "\u05d0\u05d9\u05df \u05de\u05e2\u05e0\u05d4 \u2192 \u05e6\u05d5\u05de\u05ea \u05d4\u05d1\u05d0"
+    },
+    "is_start": {
+      "type": "boolean",
+      "title": "\u05e6\u05d5\u05de\u05ea \u05d4\u05ea\u05d7\u05dc\u05d4",
+      "default": false
+    },
+    "is_end": {
+      "type": "boolean",
+      "title": "\u05e6\u05d5\u05de\u05ea \u05e1\u05d9\u05d5\u05dd",
+      "default": false
+    },
+    "order": {
+      "type": "number",
+      "title": "\u05e1\u05d3\u05e8",
+      "default": 0
+    }
+  },
+  "required": [
+    "script_id",
+    "text"
+  ]
+}

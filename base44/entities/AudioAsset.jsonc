@@ -1,0 +1,40 @@
+{
+  "name": "AudioAsset",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "\u05e9\u05dd"
+    },
+    "text": {
+      "type": "string",
+      "title": "\u05d8\u05e7\u05e1\u05d8"
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "he",
+        "ar"
+      ],
+      "default": "he",
+      "title": "\u05e9\u05e4\u05d4"
+    },
+    "voice": {
+      "type": "string",
+      "enum": [
+        "male",
+        "female"
+      ],
+      "default": "female",
+      "title": "\u05e7\u05d5\u05dc"
+    },
+    "file_url": {
+      "type": "string",
+      "title": "\u05e7\u05d5\u05d1\u05e5 \u05e9\u05de\u05e2"
+    }
+  },
+  "required": [
+    "name",
+    "text"
+  ]
+}

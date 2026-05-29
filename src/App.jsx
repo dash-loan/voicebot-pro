@@ -5,8 +5,25 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
-import ScrollToTop from './components/ScrollToTop';
-// Add page imports here
+import { Navigate } from 'react-router-dom';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+import Layout from './components/Layout';
+import Home from './pages/Home';
+import AdminDashboard from './pages/AdminDashboard';
+import ClientManagement from './pages/ClientManagement';
+import ScriptList from './pages/ScriptList';
+import ScriptBuilder from './pages/ScriptBuilder';
+import TTSBuilder from './pages/TTSBuilder';
+import VirtualNumbers from './pages/VirtualNumbers';
+import ClientDashboard from './pages/ClientDashboard';
+import Campaigns from './pages/Campaigns';
+import CampaignDetail from './pages/CampaignDetail';
+import CallResults from './pages/CallResults';
+import Analytics from './pages/Analytics';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -34,7 +51,26 @@ const AuthenticatedApp = () => {
   // Render the main app
   return (
     <Routes>
-      {/* Add your page Route elements here */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+        <Route element={<Layout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/clients" element={<ClientManagement />} />
+          <Route path="/admin/scripts" element={<ScriptList />} />
+          <Route path="/admin/scripts/:scriptId" element={<ScriptBuilder />} />
+          <Route path="/admin/tts" element={<TTSBuilder />} />
+          <Route path="/admin/numbers" element={<VirtualNumbers />} />
+          <Route path="/dashboard" element={<ClientDashboard />} />
+          <Route path="/campaigns" element={<Campaigns />} />
+          <Route path="/campaigns/:campaignId" element={<CampaignDetail />} />
+          <Route path="/results" element={<CallResults />} />
+          <Route path="/analytics" element={<Analytics />} />
+        </Route>
+      </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
@@ -47,7 +83,7 @@ function App() {
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
         <Router>
-          <ScrollToTop />
+
           <AuthenticatedApp />
         </Router>
         <Toaster />
