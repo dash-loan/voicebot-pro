@@ -3,7 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import StatsCard from '@/components/StatsCard';
-import { ArrowRight, Play, Pause, Square, Users, PhoneCall, UserCheck, Clock, Zap } from 'lucide-react';
+import { ArrowRight, Play, Pause, Square, Users, PhoneCall, UserCheck, Clock, Zap, Star } from 'lucide-react';
+import { deductMinutes } from '@/functions/deductMinutes';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -48,20 +49,46 @@ export default function CampaignDetail() {
     mutationFn: async () => {
       setSimulating(true);
       const user = await base44.auth.me();
-      const pendingContacts = contacts.filter(c => c.status === 'pending').slice(0, 5);
-      
+      // Process up to 30 pending contacts per run
+      const pendingContacts = contacts.filter(c => c.status === 'pending').slice(0, 30);
+      if (pendingContacts.length === 0) return 0;
+
+      // Realistic distribution: 20% interested, 20% not_interested, 20% answered, 25% no_answer, 15% voicemail
+      const weightedStatuses = [
+        ...Array(20).fill('interested'),
+        ...Array(20).fill('not_interested'),
+        ...Array(20).fill('answered'),
+        ...Array(25).fill('no_answer'),
+        ...Array(15).fill('voicemail'),
+      ];
+
+      const mockTranscripts = [
+        [{ role: 'bot', text: 'שלום, אני מתקשר בשם החברה. האם אתה מעוניין לשמוע על המבצע?' }, { role: 'user', text: 'כן, אשמח לשמוע.' }, { role: 'bot', text: 'מצוין! נציג שלנו יחזור אליך בהקדם עם פרטים נוספים.' }, { role: 'user', text: 'תודה.' }],
+        [{ role: 'bot', text: 'שלום, אני מתקשר בשם החברה. מתי נוח לך לשמוע על ההצעה?' }, { role: 'user', text: 'לא מעוניין, תודה.' }, { role: 'bot', text: 'מובן לחלוטין. תודה על הזמן!' }],
+        [{ role: 'bot', text: 'שלום! אני מתקשר לגבי המבצע המיוחד שלנו.' }, { role: 'user', text: 'אין לי עניין בזה.' }, { role: 'bot', text: 'מכובד, שיהיה לך יום טוב.' }],
+      ];
+
+      let totalSeconds = 0;
+      let totalVapiCost = 0;
+
       for (const contact of pendingContacts) {
-        const statuses = ['answered', 'no_answer', 'voicemail', 'interested', 'not_interested'];
-        const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
-        const duration = randomStatus === 'answered' || randomStatus === 'interested' || randomStatus === 'not_interested' 
-          ? Math.floor(Math.random() * 180) + 30 
-          : 0;
+        const statusIndex = Math.floor(Math.random() * weightedStatuses.length);
+        const status = weightedStatuses[statusIndex];
+        const isTalked = ['answered', 'interested', 'not_interested'].includes(status);
+        const activeSec = isTalked ? Math.floor(Math.random() * 80) + 30 : Math.floor(Math.random() * 15) + 5;
+        const vapiCost = (activeSec / 60) * 0.05;
+        totalSeconds += activeSec;
+        totalVapiCost += vapiCost;
+
+        const transcriptJson = isTalked
+          ? JSON.stringify(mockTranscripts[Math.floor(Math.random() * mockTranscripts.length)])
+          : null;
 
         await base44.entities.Contact.update(contact.id, {
-          status: randomStatus,
+          status,
           attempts: (contact.attempts || 0) + 1,
           last_attempt: new Date().toISOString(),
-          duration
+          duration: activeSec,
         });
 
         await base44.entities.CallLog.create({
@@ -73,26 +100,42 @@ export default function CampaignDetail() {
           campaign_name: campaign.name,
           start_time: new Date().toISOString(),
           end_time: new Date().toISOString(),
-          duration,
-          status: randomStatus,
-          transcript: randomStatus === 'interested' ? 'לקוח: כן, אני מעוניין לשמוע עוד פרטים.\nבוט: מצוין! נציג יחזור אליך בקרוב.' : null
+          duration: activeSec,
+          active_duration_seconds: activeSec,
+          status,
+          vapi_cost: vapiCost,
+          transcript_json: transcriptJson,
+          transcript: transcriptJson
+            ? JSON.parse(transcriptJson).map(m => `${m.role === 'bot' ? 'בוט' : 'לקוח'}: ${m.text}`).join('\n')
+            : null,
         });
       }
 
-      const updatedContacts = await base44.entities.Contact.filter({ campaign_id: campaignId });
-      const dialed = updatedContacts.filter(c => c.status !== 'pending').length;
-      const answered = updatedContacts.filter(c => ['answered', 'interested', 'not_interested'].includes(c.status)).length;
-      
+      // Update campaign counters
+      const allContacts = await base44.entities.Contact.filter({ campaign_id: campaignId });
+      const dialed = allContacts.filter(c => c.status !== 'pending').length;
+      const answered = allContacts.filter(c => ['answered', 'interested', 'not_interested'].includes(c.status)).length;
+      const interested = allContacts.filter(c => c.status === 'interested').length;
       await base44.entities.Campaign.update(campaignId, {
         dialed_contacts: dialed,
-        answered_contacts: answered
+        answered_contacts: answered,
+        actual_minutes: ((campaign.actual_minutes || 0) + totalSeconds / 60),
       });
+
+      // Deduct minutes from client balance
+      await deductMinutes({ client_id: user.id, active_duration_seconds: totalSeconds, campaign_id: campaignId, vapi_cost: totalVapiCost });
+
+      return { processed: pendingContacts.length, interested };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       setSimulating(false);
       queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
       queryClient.invalidateQueries({ queryKey: ['campaignContacts', campaignId] });
-      toast({ title: 'סימולציה הושלמה', description: '5 שיחות בוצעו (סימולציה)' });
+      if (result) toast({ title: `סימולציה הושלמה ✅`, description: `${result.processed} שיחות · ${result.interested} מעוניינים` });
+    },
+    onError: () => {
+      setSimulating(false);
+      toast({ title: 'שגיאה בסימולציה', variant: 'destructive' });
     }
   });
 

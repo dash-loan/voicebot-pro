@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { useState } from 'react';
 import { LayoutDashboard, Users, FileText, Mic, Phone, Megaphone, BarChart3, List, LogOut, Menu, Bot, Zap, Activity, TrendingUp, Settings, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import BlockedUserScreen from '@/components/BlockedUserScreen';
 
 const adminLinks = [
   { to: '/admin', icon: LayoutDashboard, label: 'דשבורד' },
@@ -29,6 +30,8 @@ export default function Layout() {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
+  if (user?.status === 'blocked') return <BlockedUserScreen />;
+
   const links = user?.role === 'admin' ? adminLinks : clientLinks;
   const isActive = (path) => location.pathname === path;
   const handleLogout = () => base44.auth.logout();

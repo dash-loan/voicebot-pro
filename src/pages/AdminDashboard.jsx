@@ -28,10 +28,9 @@ export default function AdminDashboard() {
     queryFn: () => base44.entities.Script.list()
   });
 
-  const { data: callLogs = [] } = useQuery({
-    queryKey: ['allCallLogs'],
-    queryFn: () => base44.entities.CallLog.list()
-  });
+  const { data: callLogs = [] } = useQuery({ queryKey: ['allCallLogs'], queryFn: () => base44.entities.CallLog.list() });
+  const { data: vapiConfigs = [] } = useQuery({ queryKey: ['vapiConfigs'], queryFn: () => base44.entities.VapiConfig.list() });
+  const { data: numbers = [] } = useQuery({ queryKey: ['virtualNumbers'], queryFn: () => base44.entities.VirtualNumber.list() });
 
   const totalMinutes = clientMinutes.reduce((sum, cm) => sum + (cm.total_minutes || 0), 0);
   const usedMinutes = clientMinutes.reduce((sum, cm) => sum + (cm.used_minutes || 0), 0);
@@ -48,6 +47,32 @@ export default function AdminDashboard() {
       <div>
         <h1 className="text-3xl font-bold">דשבורד ניהול</h1>
         <p className="text-muted-foreground mt-1">סקירה כללית של המערכת</p>
+      </div>
+
+      {/* Quick Start Checklist */}
+      <div className="bg-gradient-to-l from-primary/5 to-transparent border border-primary/20 rounded-xl p-6 space-y-3">
+        <h2 className="font-bold text-lg">🚀 צעדים להפעלה</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {[
+            { label: 'מערכת מוכנה', done: true },
+            { label: 'חבר חשבון Vapi', done: vapiConfigs[0]?.is_connected, link: '/admin/settings' },
+            { label: 'הוסף מספר וירטואלי', done: numbers.length > 0, link: '/admin/numbers' },
+            { label: 'צור תסריט ראשון', done: scripts.length > 0, link: '/admin/scripts' },
+            { label: 'הוסף לקוח ראשון', done: users.length > 0, link: '/admin/clients' },
+          ].map((step, i) => (
+            step.link && !step.done ? (
+              <Link key={i} to={step.link} className="flex items-center gap-2 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
+                <span className="w-5 h-5 rounded-full border-2 border-muted-foreground/30 flex-shrink-0"/>
+                <span className="text-sm text-muted-foreground">{step.label}</span>
+              </Link>
+            ) : (
+              <div key={i} className={`flex items-center gap-2 p-3 rounded-lg border ${step.done ? 'bg-green-50 border-green-200' : 'bg-card'}`}>
+                <span className="text-lg">{step.done ? '✅' : '⬜'}</span>
+                <span className={`text-sm font-medium ${step.done ? 'text-green-700' : 'text-muted-foreground'}`}>{step.label}</span>
+              </div>
+            )
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

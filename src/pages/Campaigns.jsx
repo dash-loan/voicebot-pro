@@ -27,6 +27,7 @@ export default function Campaigns() {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({ name: '', script_id: '', dialing_start: '09:00', dialing_end: '20:00', max_concurrent: 5, max_retries: 2 });
   const [contacts, setContacts] = useState([]);
+  const [uploadPreview, setUploadPreview] = useState(null); // { valid, invalid, duplicates }
 
   const { data: user } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
 
@@ -86,19 +87,43 @@ export default function Campaigns() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['myCampaigns'] }); toast({ title: 'הקמפיין נמחק' }); }
   });
 
+  const validateIsraeliPhone = (raw) => {
+    const cleaned = raw.replace(/[\s\-\(\)\.]/g, '');
+    if (/^0(5[012345689]|[234789])\d{7}$/.test(cleaned)) return cleaned;
+    return null;
+  };
+
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result;
-      const lines = text.split('\n').filter(l => l.trim());
-      const parsed = lines.slice(1).map(line => {
-        const [name, phone] = line.split(',').map(s => s.trim().replace(/"/g, ''));
-        return { name: name || 'לא ידוע', phone };
-      }).filter(c => c.phone);
-      setContacts(parsed);
-      toast({ title: `${parsed.length} אנשי קשר נטענו` });
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      // Auto-detect header: skip first row if it contains שם / name / phone
+      const hasHeader = /שם|name|phone|טלפון/i.test(lines[0]);
+      const dataLines = hasHeader ? lines.slice(1) : lines;
+
+      const seen = new Set();
+      let valid = [];
+      let invalidCount = 0;
+      let duplicateCount = 0;
+
+      for (const line of dataLines) {
+        const parts = line.split(',').map(s => s.trim().replace(/"/g, ''));
+        const name = parts[0] || 'לא ידוע';
+        const rawPhone = parts[1] || parts[0];
+        if (!rawPhone) continue;
+        const phone = validateIsraeliPhone(rawPhone);
+        if (!phone) { invalidCount++; continue; }
+        if (seen.has(phone)) { duplicateCount++; continue; }
+        seen.add(phone);
+        valid.push({ name, phone });
+      }
+
+      setUploadPreview({ valid: valid.length, invalid: invalidCount, duplicates: duplicateCount });
+      setContacts(valid);
+      if (valid.length > 0) toast({ title: `✅ ${valid.length} מספרים תקינים נטענו` });
     };
     reader.readAsText(file);
   };
@@ -148,10 +173,21 @@ export default function Campaigns() {
                   <input type="file" accept=".csv,.xlsx" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
                   <Button variant="outline" onClick={() => fileInputRef.current?.click()}>בחר קובץ</Button>
                 </div>
-                {contacts.length > 0 && (
-                  <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
-                    <p className="font-medium text-green-800">{contacts.length} אנשי קשר נטענו בהצלחה</p>
-                    <p className="text-sm text-green-600 mt-1">דוגמה: {contacts[0]?.name} – {contacts[0]?.phone}</p>
+                {uploadPreview && (
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded">
+                      <span className="text-green-700 font-medium">✅ {uploadPreview.valid} מספרים תקינים</span>
+                    </div>
+                    {uploadPreview.invalid > 0 && (
+                      <div className="flex items-center gap-2 p-2 bg-red-50 border border-red-200 rounded">
+                        <span className="text-red-700">❌ {uploadPreview.invalid} מספרים לא תקינים (הוסרו)</span>
+                      </div>
+                    )}
+                    {uploadPreview.duplicates > 0 && (
+                      <div className="flex items-center gap-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
+                        <span className="text-yellow-700">⚠️ {uploadPreview.duplicates} כפולים (הוסרו)</span>
+                      </div>
+                    )}
                   </div>
                 )}
                 {contacts.length === 0 && (
