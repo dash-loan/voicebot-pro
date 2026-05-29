@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import StatsCard from '@/components/StatsCard';
-import { ArrowRight, Play, Pause, Square, Users, PhoneCall, UserCheck, Clock, Zap, Star } from 'lucide-react';
+import { ArrowRight, Play, Pause, Square, Users, PhoneCall, UserCheck, Clock, Zap, Upload } from 'lucide-react';
 import { deductMinutes } from '@/functions/deductMinutes';
 import { validateIsraeliMobile, formatIsraeliPhone } from '@/utils/phoneUtils';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,60 @@ export default function CampaignDetail() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [simulating, setSimulating] = useState(false);
+  const [uploadPreview, setUploadPreview] = useState(null);
+  const [pendingContacts, setPendingContacts] = useState([]);
+  const [importing, setImporting] = useState(false);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result;
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      const hasHeader = /שם|name|phone|טלפון/i.test(lines[0]);
+      const dataLines = hasHeader ? lines.slice(1) : lines;
+      const seen = new Set();
+      const valid = [];
+      const rejected = [];
+      for (const line of dataLines) {
+        const parts = line.split(',').map(s => s.trim().replace(/"/g, ''));
+        const name = parts[0] || 'לא ידוע';
+        const rawPhone = parts[1] || parts[0];
+        if (!rawPhone) continue;
+        const result = validateIsraeliMobile(rawPhone);
+        if (!result.valid) { rejected.push({ name, phone: rawPhone, reason: result.reason }); continue; }
+        if (seen.has(result.normalized)) { rejected.push({ name, phone: rawPhone, reason: 'כפיל' }); continue; }
+        seen.add(result.normalized);
+        valid.push({ name, phone: result.normalized });
+      }
+      setUploadPreview({ valid: valid.length, rejected });
+      setPendingContacts(valid);
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const importContacts = useMutation({
+    mutationFn: async () => {
+      setImporting(true);
+      const user = await base44.auth.me();
+      for (const c of pendingContacts) {
+        await base44.entities.Contact.create({ name: c.name, phone: c.phone, campaign_id: campaignId, client_id: user.id, status: 'pending' });
+      }
+      await base44.entities.Campaign.update(campaignId, { total_contacts: (campaign.total_contacts || 0) + pendingContacts.length });
+      return pendingContacts.length;
+    },
+    onSuccess: (count) => {
+      setImporting(false);
+      setUploadPreview(null);
+      setPendingContacts([]);
+      queryClient.invalidateQueries({ queryKey: ['campaignContacts', campaignId] });
+      queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
+      toast({ title: `✅ ${count} אנשי קשר נוספו לקמפיין` });
+    },
+    onError: () => { setImporting(false); toast({ title: 'שגיאה ביבוא', variant: 'destructive' }); }
+  });
 
   const { data: campaign, isLoading } = useQuery({
     queryKey: ['campaign', campaignId],
@@ -212,7 +266,32 @@ export default function CampaignDetail() {
       </div>
 
       <Card>
-        <CardHeader><CardTitle>אנשי קשר</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>אנשי קשר ({contacts.length})</CardTitle>
+          <div className="flex items-center gap-2">
+            <label htmlFor="upload-contacts" className="cursor-pointer">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-input bg-background text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors">
+                <Upload className="w-4 h-4" /> העלה רשומות חדשות
+              </div>
+              <input id="upload-contacts" type="file" accept=".csv,.txt" className="hidden" onChange={handleFileUpload} />
+            </label>
+          </div>
+        </CardHeader>
+        {uploadPreview && (
+          <div className="px-6 pb-2 space-y-2">
+            <div className="p-2 bg-green-50 border border-green-200 rounded text-sm text-green-700 font-medium">
+              ✅ {uploadPreview.valid} מספרים תקינים {uploadPreview.rejected.length > 0 && <span className="text-muted-foreground font-normal">&nbsp;· {uploadPreview.rejected.length} נדחו</span>}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => importContacts.mutate()} disabled={importing || pendingContacts.length === 0} className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                {importing ? 'מייבא...' : `יבא ${uploadPreview.valid} רשומות`}
+              </button>
+              <button onClick={() => { setUploadPreview(null); setPendingContacts([]); }} className="inline-flex items-center px-3 py-1.5 text-sm rounded-md border hover:bg-muted">
+                ביטול
+              </button>
+            </div>
+          </div>
+        )}
         <CardContent>
           {contacts.length === 0 ? (
             <p className="text-center py-8 text-muted-foreground">אין אנשי קשר בקמפיין</p>
