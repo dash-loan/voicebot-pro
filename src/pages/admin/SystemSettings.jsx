@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
-import { Zap, Phone, DollarSign, CheckCircle, XCircle } from 'lucide-react';
+import { Zap, Phone, DollarSign, CheckCircle, XCircle, Link } from 'lucide-react';
+import { checkVapiConnection } from '@/functions/checkVapiConnection';
 
 export default function SystemSettings() {
   const { toast } = useToast();
@@ -36,18 +37,35 @@ export default function SystemSettings() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['vapiConfigs'] }); toast({ title: 'הגדרות נשמרו' }); }
   });
 
+  const [testResultMsg, setTestResultMsg] = useState(null);
+
   const testVapi = async () => {
-    setTesting(true); setTestResult(null);
-    await new Promise(r => setTimeout(r, 1500));
-    const key = vapi.key || config?.vapi_api_key || '';
-    const ok = key.length > 15;
-    setTestResult(ok ? 'success' : 'error');
-    if (ok && config) {
-      await base44.entities.VapiConfig.update(config.id, { is_connected: true, last_tested_at: new Date().toISOString() });
-      queryClient.invalidateQueries({ queryKey: ['vapiConfigs'] });
+    setTesting(true); setTestResult(null); setTestResultMsg(null);
+    try {
+      const res = await checkVapiConnection({
+        api_key: vapi.key || config?.vapi_api_key,
+        assistant_id: vapi.assistantId || config?.vapi_assistant_id,
+      });
+      const data = res.data;
+      if (data.connected) {
+        setTestResult('success');
+        setTestResultMsg(`מחובר ✅ – Assistant: ${data.assistant_name}`);
+        if (config) {
+          await base44.entities.VapiConfig.update(config.id, { is_connected: true, last_tested_at: new Date().toISOString() });
+          queryClient.invalidateQueries({ queryKey: ['vapiConfigs'] });
+        }
+      } else {
+        setTestResult('error');
+        setTestResultMsg(data.error || 'חיבור נכשל');
+      }
+    } catch (e) {
+      setTestResult('error');
+      setTestResultMsg(e.message);
     }
     setTesting(false);
   };
+
+  const webhookUrl = `${window.location.origin}/api/functions/vapiWebhook`;
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -82,8 +100,14 @@ export default function SystemSettings() {
             <Button onClick={() => save.mutate()} disabled={save.isPending}>שמור</Button>
             <Button variant="outline" onClick={testVapi} disabled={testing}>{testing ? 'בודק...' : 'בדוק חיבור'}</Button>
           </div>
-          {testResult === 'success' && <p className="text-green-600 text-sm flex items-center gap-1"><CheckCircle className="w-4 h-4" /> החיבור הצליח!</p>}
-          {testResult === 'error' && <p className="text-red-600 text-sm flex items-center gap-1"><XCircle className="w-4 h-4" /> החיבור נכשל. בדוק את ה-API Key.</p>}
+          {testResult === 'success' && <p className="text-green-600 text-sm flex items-center gap-1"><CheckCircle className="w-4 h-4" /> {testResultMsg}</p>}
+          {testResult === 'error' && <p className="text-red-600 text-sm flex items-center gap-1"><XCircle className="w-4 h-4" /> {testResultMsg}</p>}
+
+          <div className="mt-4 p-3 bg-muted rounded-lg space-y-1">
+            <p className="text-xs font-semibold flex items-center gap-1"><Link className="w-3 h-3" /> Webhook URL להכנסה ב-Vapi Dashboard:</p>
+            <code className="text-xs text-blue-600 break-all block" dir="ltr">{webhookUrl}</code>
+            <p className="text-xs text-muted-foreground">ב-Vapi: Settings → Webhooks → הדבק את ה-URL → סמן אירועים: call-started, end-of-call-report</p>
+          </div>
         </CardContent>
       </Card>
 

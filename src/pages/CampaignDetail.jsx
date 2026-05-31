@@ -3,8 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import StatsCard from '@/components/StatsCard';
-import { ArrowRight, Play, Pause, Square, Users, PhoneCall, UserCheck, Clock, Zap, Upload } from 'lucide-react';
+import { ArrowRight, Play, Pause, Square, Users, PhoneCall, UserCheck, Clock, Zap, Upload, Star, AlertCircle } from 'lucide-react';
 import { deductMinutes } from '@/functions/deductMinutes';
+import { startCampaign } from '@/functions/startCampaign';
+import { stopCampaign } from '@/functions/stopCampaign';
 import { validateIsraeliMobile, formatIsraeliPhone } from '@/utils/phoneUtils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +21,8 @@ export default function CampaignDetail() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [simulating, setSimulating] = useState(false);
+  const [launching, setLaunching] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [uploadPreview, setUploadPreview] = useState(null);
   const [pendingContacts, setPendingContacts] = useState([]);
   const [importing, setImporting] = useState(false);
@@ -99,6 +103,42 @@ export default function CampaignDetail() {
       toast({ title: 'סטטוס הקמפיין עודכן' });
     }
   });
+
+  const handleStart = async () => {
+    setLaunching(true);
+    try {
+      const res = await startCampaign({ campaign_id: campaignId });
+      const data = res.data;
+      if (data.error) {
+        toast({ title: `שגיאה: ${data.error}`, variant: 'destructive' });
+      } else {
+        toast({ title: `✅ ${data.message}`, description: data.errors?.length ? `${data.errors.length} שגיאות חיוג` : undefined });
+        queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
+        queryClient.invalidateQueries({ queryKey: ['campaignContacts', campaignId] });
+      }
+    } catch (e) {
+      toast({ title: `שגיאה: ${e.message}`, variant: 'destructive' });
+    }
+    setLaunching(false);
+  };
+
+  const handleStop = async () => {
+    setStopping(true);
+    try {
+      const res = await stopCampaign({ campaign_id: campaignId });
+      const data = res.data;
+      if (data.error) {
+        toast({ title: `שגיאה: ${data.error}`, variant: 'destructive' });
+      } else {
+        toast({ title: data.message });
+        queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
+        queryClient.invalidateQueries({ queryKey: ['campaignContacts', campaignId] });
+      }
+    } catch (e) {
+      toast({ title: `שגיאה: ${e.message}`, variant: 'destructive' });
+    }
+    setStopping(false);
+  };
 
   const simulateCalls = useMutation({
     mutationFn: async () => {
@@ -226,18 +266,14 @@ export default function CampaignDetail() {
               )}
               {campaign.status === 'active' ? (
                 <>
-                  <Button variant="outline" onClick={() => updateStatus.mutate('paused')}><Pause className="w-4 h-4 ml-2" /> השהה</Button>
-                  <Button variant="destructive" onClick={() => updateStatus.mutate('completed')}><Square className="w-4 h-4 ml-2" /> עצור</Button>
+                  <Button variant="outline" onClick={handleStop} disabled={stopping}>
+                    <Pause className="w-4 h-4 ml-2" /> {stopping ? 'עוצר...' : 'עצור והשהה'}
+                  </Button>
                 </>
               ) : (
-                <Button
-                  onClick={() => {
-                    if (invalidPhones.length > 0) {
-                      toast({ title: `הפעלה חסומה – ${invalidPhones.length} מספרים בפורמט לא תקין`, variant: 'destructive' }); return;
-                    }
-                    updateStatus.mutate('active');
-                  }}
-                ><Play className="w-4 h-4 ml-2" /> הפעל</Button>
+                <Button onClick={handleStart} disabled={launching || invalidPhones.length > 0}>
+                  <Play className="w-4 h-4 ml-2" /> {launching ? `מחייג...` : `הפעל קמפיין (${pending} ממתינים)`}
+                </Button>
               )}
               <Button variant="outline" onClick={() => simulateCalls.mutate()} disabled={simulating || pending === 0}>
                 <Zap className="w-4 h-4 ml-2" /> {simulating ? 'מבצע...' : 'סימולציה'}
