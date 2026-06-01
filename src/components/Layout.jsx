@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useState } from 'react';
-import { LayoutDashboard, Users, FileText, Mic, Phone, Megaphone, BarChart3, List, LogOut, Menu, Bot, Zap, Activity, TrendingUp, Settings, Star } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Mic, Phone, Megaphone, BarChart3, LogOut, Menu, Bot, Activity, TrendingUp, Settings, Flame, PhoneCall } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BlockedUserScreen from '@/components/BlockedUserScreen';
 
@@ -22,7 +22,8 @@ const adminLinks = [
 const clientLinks = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'דשבורד' },
   { to: '/campaigns', icon: Megaphone, label: 'קמפיינים' },
-  { to: '/results', icon: Star, label: 'לקוחות רלוונטיים' },
+  { to: '/quality-leads', icon: Flame, label: 'לידים איכותיים 🔥' },
+  { to: '/results', icon: PhoneCall, label: 'כל השיחות' },
   { to: '/analytics', icon: BarChart3, label: 'אנליטיקה' },
 ];
 

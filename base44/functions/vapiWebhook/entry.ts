@@ -6,17 +6,65 @@ function getContactStatus(endedReason, transcript) {
   if (endedReason === 'voicemail') return 'voicemail';
   if (endedReason === 'no-answer' || endedReason === 'no_answer') return 'no_answer';
 
-  // For answered calls, try to detect interest from transcript
   if (transcript) {
     const lower = transcript.toLowerCase();
-    const interestedWords = ['כן', 'בטח', 'מעניין', 'אשמח', 'רוצה', 'בבקשה', 'אני רוצה', 'נשמע טוב'];
-    const notInterestedWords = ['לא', 'לא מעוניין', 'לא רוצה', 'לא תודה', 'לא עכשיו'];
+    const interestedWords = ['כן', 'בטח', 'מעניין', 'אשמח', 'רוצה', 'בבקשה', 'אני רוצה', 'נשמע טוב', 'תשלחו', 'מתי', 'כמה', 'אשמח לשמוע', 'מעוניין'];
+    const notInterestedWords = ['לא מעוניין', 'לא רוצה', 'לא תודה', 'תורידו', 'לא רלוונטי'];
     const hasInterested = interestedWords.some(w => lower.includes(w));
     const hasNotInterested = notInterestedWords.some(w => lower.includes(w));
     if (hasInterested && !hasNotInterested) return 'interested';
     if (hasNotInterested) return 'not_interested';
   }
   return 'answered';
+}
+
+// Analyze transcript → lead_quality + quality_score
+function analyzeLeadQuality(transcript, endedReason, contactStatus) {
+  // No answer / voicemail = unqualified
+  if (!endedReason) endedReason = '';
+  if (endedReason === 'voicemail' || endedReason === 'no-answer' || endedReason === 'no_answer') {
+    return { lead_quality: 'unqualified', quality_score: 5 };
+  }
+
+  if (!transcript || transcript.trim().length < 10) {
+    return { lead_quality: 'unqualified', quality_score: 10 };
+  }
+
+  const lower = transcript.toLowerCase();
+
+  // Hot lead signals
+  const hotKeywords = ['מעוניין', 'אשמח', 'בטח', 'כן בטח', 'תשלחו פרטים', 'רוצה לדעת עוד', 'מתי אפשר', 'כמה זה עולה', 'תתקשרו אליי', 'אני רוצה', 'נשמע טוב', 'מעניין אותי', 'ספר לי עוד'];
+  const warmKeywords = ['אולי', 'תשלחו', 'תשאירו פרטים', 'אחשוב על זה', 'מעניין', 'שאלה אחת', 'רוצה לבדוק', 'לא רחוק'];
+  const notInterestedKeywords = ['לא מעוניין', 'לא רוצה', 'תורידו אותי', 'לא רלוונטי', 'לא עכשיו', 'עסוק', 'לא מתאים', 'כבר יש לי'];
+
+  const hotCount = hotKeywords.filter(w => lower.includes(w)).length;
+  const warmCount = warmKeywords.filter(w => lower.includes(w)).length;
+  const notCount = notInterestedKeywords.filter(w => lower.includes(w)).length;
+
+  // If contact was marked interested by status logic, boost score
+  const statusBoost = contactStatus === 'interested' ? 15 : 0;
+
+  if (notCount >= 2 || (notCount >= 1 && hotCount === 0)) {
+    const score = Math.max(10, 45 - notCount * 8 + statusBoost);
+    return { lead_quality: 'not_interested', quality_score: Math.min(49, score) };
+  }
+
+  if (hotCount >= 2 || (hotCount >= 1 && notCount === 0)) {
+    const score = Math.min(100, 85 + hotCount * 5 + statusBoost);
+    return { lead_quality: 'hot_lead', quality_score: score };
+  }
+
+  if (warmCount >= 1 || hotCount === 1) {
+    const score = Math.min(89, 65 + warmCount * 5 + hotCount * 8 + statusBoost);
+    return { lead_quality: 'warm_lead', quality_score: score };
+  }
+
+  if (contactStatus === 'answered' || contactStatus === 'interested') {
+    const score = 50 + statusBoost;
+    return { lead_quality: 'qualified', quality_score: Math.min(69, score) };
+  }
+
+  return { lead_quality: 'unqualified', quality_score: 15 };
 }
 
 Deno.serve(async (req) => {
@@ -30,15 +78,14 @@ Deno.serve(async (req) => {
     const callData = body.message?.call || body.call || {};
     const vapiCallId = callData.id || body.call?.id;
 
-    // Only process call-ended events fully; log everything
+    // Log all events
     await base44.asServiceRole.entities.VapiWebhookEvents.create({
       event: eventType === 'end-of-call-report' ? 'call.ended' : eventType === 'call-started' ? 'call.started' : 'call.ended',
       call_id: vapiCallId || 'unknown',
       received_at: new Date().toISOString(),
       payload: JSON.stringify(body),
-    }).catch(() => {}); // non-blocking
+    }).catch(() => {});
 
-    // Only process end-of-call-report (the main completion event from Vapi)
     if (eventType !== 'end-of-call-report' && eventType !== 'call-ended') {
       return Response.json({ received: true });
     }
@@ -58,22 +105,20 @@ Deno.serve(async (req) => {
     const messages = callData.messages || body.message?.messages || [];
     const durationSeconds = callData.duration || 0;
     const vapiCost = callData.cost || 0;
-    const activeDuration = Math.max(0, durationSeconds - 5); // subtract ~5s ring time
+    const activeDuration = Math.max(0, durationSeconds - 5);
 
     const contactStatus = getContactStatus(endedReason, transcript);
+    const { lead_quality, quality_score } = analyzeLeadQuality(transcript, endedReason, contactStatus);
 
-    // Load campaign to get client_id
     const campaign = await base44.asServiceRole.entities.Campaign.get(contact.campaign_id);
     if (!campaign) return Response.json({ received: true, warning: 'campaign not found' });
 
-    // Update contact
     await base44.asServiceRole.entities.Contact.update(contact.id, {
       status: contactStatus,
       duration: activeDuration,
       last_attempt: new Date().toISOString(),
     });
 
-    // Save CallLog
     await base44.asServiceRole.entities.CallLog.create({
       contact_id: contact.id,
       campaign_id: contact.campaign_id,
@@ -86,6 +131,8 @@ Deno.serve(async (req) => {
       duration: durationSeconds,
       active_duration_seconds: activeDuration,
       status: contactStatus,
+      lead_quality,
+      quality_score,
       vapi_call_id: vapiCallId,
       vapi_cost: vapiCost,
       ended_reason: endedReason,
@@ -93,7 +140,6 @@ Deno.serve(async (req) => {
       transcript_json: messages.length > 0 ? JSON.stringify(messages) : null,
     });
 
-    // Update campaign counters
     const allContacts = await base44.asServiceRole.entities.Contact.filter({ campaign_id: contact.campaign_id });
     const dialed = allContacts.filter(c => c.status !== 'pending' && c.status !== 'calling').length;
     const answered = allContacts.filter(c => ['answered', 'interested', 'not_interested'].includes(c.status)).length;
@@ -106,7 +152,6 @@ Deno.serve(async (req) => {
       ...(stillCalling === 0 && dialed >= (campaign.total_contacts || 0) ? { status: 'completed' } : {}),
     });
 
-    // Deduct minutes from client
     if (activeDuration > 0) {
       const minutesList = await base44.asServiceRole.entities.ClientMinutes.filter({ client_id: campaign.client_id });
       const clientMinutes = minutesList[0];
@@ -128,14 +173,13 @@ Deno.serve(async (req) => {
           description: `שיחה עם ${contact.name} – קמפיין ${campaign.name}`,
         });
 
-        // If minutes exhausted → pause campaign
         if (newRemaining <= 0 && stillCalling === 0) {
           await base44.asServiceRole.entities.Campaign.update(contact.campaign_id, { status: 'paused' });
         }
       }
     }
 
-    return Response.json({ received: true, status: contactStatus });
+    return Response.json({ received: true, status: contactStatus, lead_quality, quality_score });
 
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });

@@ -31,6 +31,7 @@ import QuickDial from './pages/admin/QuickDial';
 import AllCampaigns from './pages/admin/AllCampaigns';
 import SystemSettings from './pages/admin/SystemSettings';
 import RelevantContacts from './pages/RelevantContacts';
+import QualityLeads from './pages/QualityLeads';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -69,6 +70,7 @@ const AuthenticatedApp = () => {
           <Route path="/campaigns" element={<Campaigns />} />
           <Route path="/campaigns/:campaignId" element={<CampaignDetail />} />
           <Route path="/results" element={<RelevantContacts />} />
+          <Route path="/quality-leads" element={<QualityLeads />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route element={<AdminRoute />}>
             <Route path="/admin" element={<AdminDashboard />} />
