@@ -16,6 +16,7 @@ const adminLinks = [
   { to: '/admin/profitability', icon: TrendingUp, label: 'רווחיות' },
   { to: '/admin/vapi-events', icon: Activity, label: 'לוג מערכת' },
   { to: '/admin/settings', icon: Settings, label: 'הגדרות מערכת' },
+  { to: '/admin/quick-dial', icon: Phone, label: 'Quick Dial' },
 ];
 
 const clientLinks = [

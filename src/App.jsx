@@ -27,6 +27,7 @@ import Analytics from './pages/Analytics';
 import VapiEvents from './pages/VapiEvents';
 import AdminRoute from './components/AdminRoute';
 import Profitability from './pages/admin/Profitability';
+import QuickDial from './pages/admin/QuickDial';
 import AllCampaigns from './pages/admin/AllCampaigns';
 import SystemSettings from './pages/admin/SystemSettings';
 import RelevantContacts from './pages/RelevantContacts';
@@ -80,6 +81,7 @@ const AuthenticatedApp = () => {
             <Route path="/admin/profitability" element={<Profitability />} />
             <Route path="/admin/vapi-events" element={<VapiEvents />} />
             <Route path="/admin/settings" element={<SystemSettings />} />
+            <Route path="/admin/quick-dial" element={<QuickDial />} />
           </Route>
         </Route>
       </Route>

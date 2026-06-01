@@ -3,10 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import StatsCard from '@/components/StatsCard';
-import { ArrowRight, Play, Pause, Square, Users, PhoneCall, UserCheck, Clock, Zap, Upload, Star, AlertCircle } from 'lucide-react';
-import { deductMinutes } from '@/functions/deductMinutes';
-import { startCampaign } from '@/functions/startCampaign';
-import { stopCampaign } from '@/functions/stopCampaign';
+import { ArrowRight, Play, Pause, Users, PhoneCall, UserCheck, Clock, Zap, Upload } from 'lucide-react';
+import { vapiCall, vapiEndCall } from '@/utils/vapiClient';
 import { validateIsraeliMobile, formatIsraeliPhone } from '@/utils/phoneUtils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +21,7 @@ export default function CampaignDetail() {
   const [simulating, setSimulating] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [stopping, setStopping] = useState(false);
+  const [dialProgress, setDialProgress] = useState(null);
   const [uploadPreview, setUploadPreview] = useState(null);
   const [pendingContacts, setPendingContacts] = useState([]);
   const [importing, setImporting] = useState(false);
@@ -105,38 +104,52 @@ export default function CampaignDetail() {
   });
 
   const handleStart = async () => {
+    const pendingList = contacts.filter(c => c.status === 'pending');
+    if (pendingList.length === 0) { toast({ title: 'אין אנשי קשר ממתינים', variant: 'destructive' }); return; }
     setLaunching(true);
-    try {
-      const res = await startCampaign({ campaign_id: campaignId });
-      const data = res.data;
-      if (data.error) {
-        toast({ title: `שגיאה: ${data.error}`, variant: 'destructive' });
-      } else {
-        toast({ title: `✅ ${data.message}`, description: data.errors?.length ? `${data.errors.length} שגיאות חיוג` : undefined });
-        queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
-        queryClient.invalidateQueries({ queryKey: ['campaignContacts', campaignId] });
-      }
-    } catch (e) {
-      toast({ title: `שגיאה: ${e.message}`, variant: 'destructive' });
+    setDialProgress({ current: 0, total: pendingList.length, errors: 0 });
+    await base44.entities.Campaign.update(campaignId, { status: 'active' });
+    const maxConcurrent = campaign.max_concurrent || 3;
+    let successCount = 0;
+    let errorCount = 0;
+    for (let i = 0; i < pendingList.length; i += maxConcurrent) {
+      const batch = pendingList.slice(i, i + maxConcurrent);
+      await Promise.all(batch.map(async (contact) => {
+        try {
+          const data = await vapiCall({ phone: contact.phone, name: contact.name });
+          await base44.entities.Contact.update(contact.id, {
+            status: 'calling',
+            attempts: (contact.attempts || 0) + 1,
+            last_attempt: new Date().toISOString(),
+            notes: data.id,
+          });
+          successCount++;
+        } catch (err) {
+          errorCount++;
+          await base44.entities.Contact.update(contact.id, { notes: `error: ${err.message}` });
+        }
+        setDialProgress(p => ({ ...p, current: p.current + 1, errors: errorCount }));
+      }));
     }
+    await base44.entities.Campaign.update(campaignId, { dialed_contacts: (campaign.dialed_contacts || 0) + successCount });
+    queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
+    queryClient.invalidateQueries({ queryKey: ['campaignContacts', campaignId] });
+    toast({ title: `✅ חויגו ${successCount} מספרים`, description: errorCount > 0 ? `${errorCount} שגיאות` : undefined });
     setLaunching(false);
+    setDialProgress(null);
   };
 
   const handleStop = async () => {
     setStopping(true);
-    try {
-      const res = await stopCampaign({ campaign_id: campaignId });
-      const data = res.data;
-      if (data.error) {
-        toast({ title: `שגיאה: ${data.error}`, variant: 'destructive' });
-      } else {
-        toast({ title: data.message });
-        queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
-        queryClient.invalidateQueries({ queryKey: ['campaignContacts', campaignId] });
-      }
-    } catch (e) {
-      toast({ title: `שגיאה: ${e.message}`, variant: 'destructive' });
-    }
+    const callingList = contacts.filter(c => c.status === 'calling' && c.notes && !c.notes.startsWith('error'));
+    await Promise.all(callingList.map(async (c) => {
+      await vapiEndCall(c.notes).catch(() => {});
+      await base44.entities.Contact.update(c.id, { status: 'pending' });
+    }));
+    await base44.entities.Campaign.update(campaignId, { status: 'paused' });
+    queryClient.invalidateQueries({ queryKey: ['campaign', campaignId] });
+    queryClient.invalidateQueries({ queryKey: ['campaignContacts', campaignId] });
+    toast({ title: `קמפיין הושהה. ${callingList.length} שיחות בוטלו.` });
     setStopping(false);
   };
 
@@ -217,8 +230,17 @@ export default function CampaignDetail() {
         actual_minutes: ((campaign.actual_minutes || 0) + totalSeconds / 60),
       });
 
-      // Deduct minutes from client balance
-      await deductMinutes({ client_id: user.id, active_duration_seconds: totalSeconds, campaign_id: campaignId, vapi_cost: totalVapiCost });
+      // Deduct minutes from client balance (inline - no import needed)
+      const minutesList = await base44.entities.ClientMinutes.filter({ client_id: user.id });
+      const clientMins = minutesList[0];
+      if (clientMins) {
+        const deductMins = totalSeconds / 60;
+        await base44.entities.ClientMinutes.update(clientMins.id, {
+          used_minutes: (clientMins.used_minutes || 0) + deductMins,
+          remaining_minutes: Math.max(0, (clientMins.remaining_minutes || 0) - deductMins),
+          monthly_used_minutes: (clientMins.monthly_used_minutes || 0) + deductMins,
+        });
+      }
 
       return { processed: pendingContacts.length, interested };
     },
@@ -271,9 +293,19 @@ export default function CampaignDetail() {
                   </Button>
                 </>
               ) : (
-                <Button onClick={handleStart} disabled={launching || invalidPhones.length > 0}>
-                  <Play className="w-4 h-4 ml-2" /> {launching ? `מחייג...` : `הפעל קמפיין (${pending} ממתינים)`}
-                </Button>
+                <>
+                  <Button onClick={handleStart} disabled={launching || invalidPhones.length > 0 || pending === 0}>
+                    <Play className="w-4 h-4 ml-2" />
+                    {dialProgress ? `מחייג ${dialProgress.current}/${dialProgress.total}...` : `הפעל קמפיין (${pending} ממתינים)`}
+                  </Button>
+                  {dialProgress && (
+                    <div className="text-xs bg-muted px-3 py-1 rounded flex items-center gap-2">
+                      <div className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      {dialProgress.current}/{dialProgress.total}
+                      {dialProgress.errors > 0 && <span className="text-destructive">{dialProgress.errors} שגיאות</span>}
+                    </div>
+                  )}
+                </>
               )}
               <Button variant="outline" onClick={() => simulateCalls.mutate()} disabled={simulating || pending === 0}>
                 <Zap className="w-4 h-4 ml-2" /> {simulating ? 'מבצע...' : 'סימולציה'}
