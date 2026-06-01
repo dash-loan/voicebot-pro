@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useState } from 'react';
-import { LayoutDashboard, Users, FileText, Mic, Phone, Megaphone, BarChart3, LogOut, Menu, Bot, Activity, TrendingUp, Settings, Flame, PhoneCall } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Phone, Megaphone, BarChart3, LogOut, Menu, Bot, Activity, TrendingUp, Settings, Flame, PhoneCall } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BlockedUserScreen from '@/components/BlockedUserScreen';
 
@@ -11,12 +11,11 @@ const adminLinks = [
   { to: '/admin/clients', icon: Users, label: 'ניהול לקוחות' },
   { to: '/admin/campaigns', icon: Megaphone, label: 'כל הקמפיינים' },
   { to: '/admin/scripts', icon: FileText, label: 'תסריטים' },
-  { to: '/admin/tts', icon: Mic, label: 'בונה קול' },
   { to: '/admin/numbers', icon: Phone, label: 'מספרים' },
   { to: '/admin/profitability', icon: TrendingUp, label: 'רווחיות' },
   { to: '/admin/vapi-events', icon: Activity, label: 'לוג מערכת' },
-  { to: '/admin/settings', icon: Settings, label: 'הגדרות מערכת' },
-  { to: '/admin/quick-dial', icon: Phone, label: 'Quick Dial' },
+  { to: '/admin/quick-dial', icon: PhoneCall, label: 'Quick Dial' },
+  { to: '/admin/settings', icon: Settings, label: 'הגדרות' },
 ];
 
 const clientLinks = [

@@ -1,56 +1,90 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Play, Pause, Megaphone } from 'lucide-react';
+import { Play, Pause, Megaphone, Eye, Flame } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from '@/components/ui/use-toast';
+import { Progress } from '@/components/ui/progress';
 
-const statusLabels = { draft: 'טיוטה', pending_vapi: 'ממתין', active: 'פעיל', paused: 'מושהה', completed: 'הושלם' };
-const statusColors = { active: 'default', completed: 'secondary', paused: 'outline', draft: 'outline', pending_vapi: 'outline' };
+const STATUS = {
+  draft:       { label: 'טיוטה',   variant: 'outline' },
+  pending_vapi:{ label: 'ממתין',   variant: 'outline' },
+  active:      { label: 'פעיל',    variant: 'default' },
+  paused:      { label: 'עצור',    variant: 'secondary' },
+  completed:   { label: 'הושלם',   variant: 'secondary' },
+};
 
 export default function AllCampaigns() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [clientFilter, setClientFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
 
-  const { data: campaigns = [], isLoading } = useQuery({ queryKey: ['allCampaigns'], queryFn: () => base44.entities.Campaign.list('-created_date') });
-  const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: () => base44.entities.User.filter({ role: 'user' }) });
-  const { data: callLogs = [] } = useQuery({ queryKey: ['allCallLogs'], queryFn: () => base44.entities.CallLog.list() });
-
-  const toggle = useMutation({
-    mutationFn: (campaign) => base44.entities.Campaign.update(campaign.id, {
-      status: campaign.status === 'active' ? 'paused' : 'active'
-    }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['allCampaigns'] }); toast({ title: 'עודכן' }); }
+  const { data: campaigns = [], isLoading } = useQuery({
+    queryKey: ['allCampaigns'],
+    queryFn: () => base44.entities.Campaign.list('-created_date'),
+  });
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => base44.entities.User.filter({ role: 'user' }),
+  });
+  const { data: callLogs = [] } = useQuery({
+    queryKey: ['allCallLogs'],
+    queryFn: () => base44.entities.CallLog.list(),
   });
 
-  const getClientName = (id) => users.find(u => u.id === id)?.full_name || users.find(u => u.id === id)?.email || id?.slice(0, 8) || '-';
-  const getCampaignCost = (cid) => {
-    const logs = callLogs.filter(l => l.campaign_id === cid);
-    const activeMin = Math.ceil(logs.reduce((s, l) => s + (l.active_duration_seconds || l.duration || 0), 0) / 60);
-    return (activeMin * 0.063).toFixed(2); // Vapi + Twilio combined
+  const toggle = useMutation({
+    mutationFn: (c) => base44.entities.Campaign.update(c.id, {
+      status: c.status === 'active' ? 'paused' : 'active',
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['allCampaigns'] });
+      toast({ title: 'סטטוס קמפיין עודכן' });
+    },
+  });
+
+  const getClientName = (id) => {
+    const u = users.find(u => u.id === id);
+    return u ? (u.full_name || u.email) : '—';
   };
 
-  const filtered = clientFilter === 'all' ? campaigns : campaigns.filter(c => c.client_id === clientFilter);
+  const getCampaignHotLeads = (cid) =>
+    callLogs.filter(l => l.campaign_id === cid && l.lead_quality === 'hot_lead').length;
+
+  const filtered = campaigns
+    .filter(c => clientFilter === 'all' || c.client_id === clientFilter)
+    .filter(c => statusFilter === 'all' || c.status === statusFilter);
+
+  const activeCount = campaigns.filter(c => c.status === 'active').length;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">כל הקמפיינים</h1>
-          <p className="text-muted-foreground mt-1">{campaigns.length} קמפיינים</p>
+          <p className="text-muted-foreground mt-1">{campaigns.length} קמפיינים · {activeCount} פעילים</p>
         </div>
-        <Select value={clientFilter} onValueChange={setClientFilter}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="כל הלקוחות" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">כל הלקוחות</SelectItem>
-            {users.map(u => <SelectItem key={u.id} value={u.id}>{u.full_name || u.email}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <div className="flex gap-2 flex-wrap">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-36"><SelectValue placeholder="כל הסטטוסים" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">כל הסטטוסים</SelectItem>
+              {Object.entries(STATUS).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={clientFilter} onValueChange={setClientFilter}>
+            <SelectTrigger className="w-44"><SelectValue placeholder="כל הלקוחות" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">כל הלקוחות</SelectItem>
+              {users.map(u => <SelectItem key={u.id} value={u.id}>{u.full_name || u.email}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <Card>
@@ -58,9 +92,9 @@ export default function AllCampaigns() {
           {isLoading ? (
             <div className="text-center py-8"><div className="w-6 h-6 border-2 border-primary/20 border-t-primary rounded-full animate-spin mx-auto" /></div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-12">
-              <Megaphone className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-              <p className="text-muted-foreground">אין קמפיינים</p>
+            <div className="text-center py-16">
+              <Megaphone className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
+              <p className="text-xl font-medium text-muted-foreground">אין קמפיינים</p>
             </div>
           ) : (
             <Table>
@@ -69,32 +103,54 @@ export default function AllCampaigns() {
                   <TableHead>שם</TableHead>
                   <TableHead>לקוח</TableHead>
                   <TableHead>סטטוס</TableHead>
-                  <TableHead>אנשי קשר</TableHead>
-                  <TableHead>חויגו</TableHead>
-                  <TableHead>ענו</TableHead>
-                  <TableHead>עלות אמיתית</TableHead>
+                  <TableHead>התקדמות</TableHead>
+                  <TableHead>לידים חמים</TableHead>
                   <TableHead>פעולות</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map(c => (
-                  <TableRow key={c.id}>
-                    <TableCell className="font-medium">{c.name}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{getClientName(c.client_id)}</TableCell>
-                    <TableCell><Badge variant={statusColors[c.status]}>{statusLabels[c.status]}</Badge></TableCell>
-                    <TableCell>{c.total_contacts || 0}</TableCell>
-                    <TableCell>{c.dialed_contacts || 0}</TableCell>
-                    <TableCell>{c.answered_contacts || 0}</TableCell>
-                    <TableCell className="font-mono text-sm">${getCampaignCost(c.id)}</TableCell>
-                    <TableCell>
-                      {c.status !== 'completed' && (
-                        <Button size="sm" variant="outline" onClick={() => toggle.mutate(c)}>
-                          {c.status === 'active' ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {filtered.map(c => {
+                  const progress = c.total_contacts > 0 ? Math.round((c.dialed_contacts / c.total_contacts) * 100) : 0;
+                  const hotLeads = getCampaignHotLeads(c.id);
+                  const s = STATUS[c.status] || STATUS.draft;
+                  return (
+                    <TableRow key={c.id} className="hover:bg-muted/30">
+                      <TableCell className="font-medium">{c.name}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{getClientName(c.client_id)}</TableCell>
+                      <TableCell><Badge variant={s.variant}>{s.label}</Badge></TableCell>
+                      <TableCell className="min-w-[160px]">
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>{c.dialed_contacts || 0} / {c.total_contacts || 0}</span>
+                            <span>{progress}%</span>
+                          </div>
+                          <Progress value={progress} className="h-2" />
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {hotLeads > 0 ? (
+                          <span className="flex items-center gap-1 text-orange-600 font-semibold">
+                            <Flame className="w-4 h-4" /> {hotLeads}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Link to={`/campaigns/${c.id}`}>
+                            <Button size="sm" variant="outline"><Eye className="w-4 h-4" /></Button>
+                          </Link>
+                          {c.status !== 'completed' && (
+                            <Button size="sm" variant="outline" onClick={() => toggle.mutate(c)} disabled={toggle.isPending}>
+                              {c.status === 'active' ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

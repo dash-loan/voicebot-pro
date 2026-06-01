@@ -1,10 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Edit, Trash2, FileText, Bot, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/components/ui/use-toast';
@@ -16,47 +16,35 @@ export default function ScriptList() {
 
   const { data: scripts = [], isLoading } = useQuery({
     queryKey: ['scripts'],
-    queryFn: () => base44.entities.Script.list('-created_date')
+    queryFn: () => base44.entities.Script.list('-created_date'),
   });
 
   const { data: users = [] } = useQuery({
     queryKey: ['users'],
-    queryFn: () => base44.entities.User.filter({ role: 'user' })
-  });
-
-  const { data: nodes = [] } = useQuery({
-    queryKey: ['scriptNodes'],
-    queryFn: () => base44.entities.ScriptNode.list()
+    queryFn: () => base44.entities.User.filter({ role: 'user' }),
   });
 
   const deleteScript = useMutation({
-    mutationFn: async (id) => {
-      const scriptNodes = nodes.filter(n => n.script_id === id);
-      for (const node of scriptNodes) {
-        await base44.entities.ScriptNode.delete(node.id);
-      }
-      await base44.entities.Script.delete(id);
-    },
+    mutationFn: (id) => base44.entities.Script.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scripts'] });
-      queryClient.invalidateQueries({ queryKey: ['scriptNodes'] });
-      toast({ title: 'התסריט נמחק בהצלחה' });
-    }
+      toast({ title: 'התסריט נמחק' });
+    },
   });
 
   const getClientName = (clientId) => {
     const user = users.find(u => u.id === clientId);
-    return user ? (user.full_name || user.email) : 'לא הוקצה';
+    return user ? (user.full_name || user.email) : null;
   };
 
-  const getNodeCount = (scriptId) => nodes.filter(n => n.script_id === scriptId).length;
+  const langLabel = { he: '🇮🇱 עברית', ar: '🇸🇦 ערבית' };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">תסריטי שיחה</h1>
-          <p className="text-muted-foreground mt-1">{scripts.length} תסריטים במערכת</p>
+          <p className="text-muted-foreground mt-1">{scripts.length} תסריטים · כל תסריט = Vapi Assistant</p>
         </div>
         <Button className="gap-2" onClick={() => navigate('/admin/scripts/new')}>
           <Plus className="w-4 h-4" /> צור תסריט חדש
@@ -68,35 +56,58 @@ export default function ScriptList() {
           {isLoading ? (
             <div className="text-center py-8"><div className="w-6 h-6 border-2 border-primary/20 border-t-primary rounded-full animate-spin mx-auto" /></div>
           ) : scripts.length === 0 ? (
-            <div className="text-center py-12">
-              <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">אין תסריטים עדיין</p>
-              <Button className="mt-4" onClick={() => navigate('/admin/scripts/new')}>צור תסריט ראשון</Button>
+            <div className="text-center py-16">
+              <FileText className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
+              <p className="text-xl font-medium text-muted-foreground">אין תסריטים עדיין</p>
+              <p className="text-sm text-muted-foreground mt-2">כל תסריט ייצור Vapi Assistant שמדבר עם הלקוחות</p>
+              <Button className="mt-6" onClick={() => navigate('/admin/scripts/new')}>
+                <Plus className="w-4 h-4 ml-2" /> צור תסריט ראשון
+              </Button>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>שם</TableHead>
-                  <TableHead>תיאור</TableHead>
+                  <TableHead>שם תסריט</TableHead>
+                  <TableHead>שפה</TableHead>
                   <TableHead>סטטוס</TableHead>
-                  <TableHead>צמתים</TableHead>
+                  <TableHead>Vapi Assistant</TableHead>
                   <TableHead>לקוח מוקצה</TableHead>
                   <TableHead>פעולות</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {scripts.map(script => (
-                  <TableRow key={script.id}>
-                    <TableCell className="font-medium">{script.name}</TableCell>
-                    <TableCell className="text-muted-foreground max-w-[200px] truncate">{script.description || '-'}</TableCell>
+                  <TableRow key={script.id} className="hover:bg-muted/30">
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Bot className="w-4 h-4 text-primary/50" />
+                        <span className="font-medium">{script.name}</span>
+                      </div>
+                      {script.description && <p className="text-xs text-muted-foreground mt-0.5 max-w-[200px] truncate">{script.description}</p>}
+                    </TableCell>
+                    <TableCell className="text-sm">{langLabel[script.language] || script.language || '—'}</TableCell>
                     <TableCell>
                       <Badge variant={script.status === 'active' ? 'default' : 'secondary'}>
                         {script.status === 'active' ? 'פעיל' : 'טיוטה'}
                       </Badge>
                     </TableCell>
-                    <TableCell>{getNodeCount(script.id)}</TableCell>
-                    <TableCell>{getClientName(script.assigned_client_id)}</TableCell>
+                    <TableCell>
+                      {script.vapi_assistant_id ? (
+                        <div className="flex items-center gap-1.5 text-green-700">
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span className="font-mono text-xs">{script.vapi_assistant_id.slice(0, 12)}...</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-yellow-600">
+                          <AlertCircle className="w-4 h-4" />
+                          <span className="text-xs">לא נוצר ב-Vapi</span>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {getClientName(script.assigned_client_id) || <span className="italic">כל הלקוחות</span>}
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Button size="sm" variant="outline" onClick={() => navigate(`/admin/scripts/${script.id}`)}>
@@ -111,7 +122,9 @@ export default function ScriptList() {
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>מחיקת תסריט</AlertDialogTitle>
-                              <AlertDialogDescription>האם אתה בטוח שברצונך למחוק את התסריט "{script.name}"? פעולה זו בלתי הפיכה.</AlertDialogDescription>
+                              <AlertDialogDescription>
+                                האם למחוק את "{script.name}"? פעולה זו לא תמחק את ה-Assistant ב-Vapi עצמו.
+                              </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>ביטול</AlertDialogCancel>

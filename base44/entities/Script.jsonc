@@ -10,6 +10,23 @@
       "type": "string",
       "title": "\u05ea\u05d9\u05d0\u05d5\u05e8"
     },
+    "language": {
+      "type": "string",
+      "enum": [
+        "he",
+        "ar"
+      ],
+      "default": "he",
+      "title": "\u05e9\u05e4\u05d4"
+    },
+    "system_prompt": {
+      "type": "string",
+      "title": "System Prompt (\u05d4\u05d5\u05e8\u05d0\u05d5\u05ea \u05dc-AI)"
+    },
+    "first_message": {
+      "type": "string",
+      "title": "\u05d4\u05d5\u05d3\u05e2\u05d4 \u05e8\u05d0\u05e9\u05d5\u05e0\u05d4"
+    },
     "status": {
       "type": "string",
       "enum": [
@@ -22,6 +39,10 @@
     "assigned_client_id": {
       "type": "string",
       "title": "\u05dc\u05e7\u05d5\u05d7 \u05de\u05d5\u05e7\u05e6\u05d4"
+    },
+    "vapi_assistant_id": {
+      "type": "string",
+      "title": "Vapi Assistant ID"
     }
   },
   "required": [

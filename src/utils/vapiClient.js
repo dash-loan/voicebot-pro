@@ -1,64 +1,129 @@
-// Vapi API client - frontend direct calls
-const VAPI_API_KEY = 'f813dae1-0a46-4308-8dee-4ec9a68fecf6';
-const VAPI_ASSISTANT_ID = 'aa048f01-d2b0-4a46-828e-121ccc62d691';
-const VAPI_PHONE_NUMBER_ID = '042b746b-f5e6-40fa-8830-8137433d5a69';
+/**
+ * Vapi API Client
+ * All Vapi API calls are centralized here.
+ * apiKey must be passed from the caller (loaded from VapiConfig entity).
+ * This makes migration to a private server straightforward.
+ */
+
 const VAPI_BASE = 'https://api.vapi.ai';
 
-export { VAPI_ASSISTANT_ID, VAPI_PHONE_NUMBER_ID };
-
-export async function vapiCall({ phone, name, assistantId, phoneNumberId }) {
-  const response = await fetch(`${VAPI_BASE}/call`, {
-    method: 'POST',
+async function vapiRequest({ apiKey, method, path, body }) {
+  const response = await fetch(`${VAPI_BASE}${path}`, {
+    method,
     headers: {
-      'Authorization': `Bearer ${VAPI_API_KEY}`,
+      'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      assistantId: assistantId || VAPI_ASSISTANT_ID,
-      phoneNumberId: phoneNumberId || VAPI_PHONE_NUMBER_ID,
-      customer: {
-        number: phone,
-        name: name || 'לקוח',
-      },
-    }),
+    body: body ? JSON.stringify(body) : undefined,
   });
-
-  const data = await response.json();
-
+  const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.message || `שגיאת Vapi: ${response.status}`);
+    throw new Error(data.message || `שגיאת Vapi ${response.status}: ${path}`);
   }
-
-  return data; // { id, status, ... }
+  return data;
 }
 
-export async function vapiEndCall(callId) {
+/** Create an outbound call */
+export async function vapiCall({ apiKey, phone, name, assistantId, phoneNumberId }) {
+  return vapiRequest({
+    apiKey,
+    method: 'POST',
+    path: '/call',
+    body: {
+      assistantId,
+      phoneNumberId,
+      customer: { number: phone, name: name || 'לקוח' },
+    },
+  });
+}
+
+/** End (delete) an active call */
+export async function vapiEndCall({ apiKey, callId }) {
   const response = await fetch(`${VAPI_BASE}/call/${callId}`, {
     method: 'DELETE',
-    headers: { 'Authorization': `Bearer ${VAPI_API_KEY}` },
+    headers: { 'Authorization': `Bearer ${apiKey}` },
   });
   return response.ok;
 }
 
-export async function vapiGetCall(callId) {
-  const response = await fetch(`${VAPI_BASE}/call/${callId}`, {
-    headers: { 'Authorization': `Bearer ${VAPI_API_KEY}` },
-  });
-  if (!response.ok) return null;
-  return response.json();
+/** Get call details */
+export async function vapiGetCall({ apiKey, callId }) {
+  return vapiRequest({ apiKey, method: 'GET', path: `/call/${callId}` });
 }
 
-export async function vapiCheckConnection(apiKey, assistantId) {
-  const key = apiKey || VAPI_API_KEY;
-  const aId = assistantId || VAPI_ASSISTANT_ID;
-  const response = await fetch(`${VAPI_BASE}/assistant/${aId}`, {
-    headers: { 'Authorization': `Bearer ${key}` },
-  });
-  if (response.status === 200) {
-    const data = await response.json();
+/** Check connection validity */
+export async function vapiCheckConnection({ apiKey, assistantId }) {
+  try {
+    const data = await vapiRequest({ apiKey, method: 'GET', path: `/assistant/${assistantId}` });
     return { connected: true, name: data.name };
+  } catch (e) {
+    if (e.message.includes('401')) return { connected: false, error: 'API Key שגוי ❌' };
+    if (e.message.includes('404')) return { connected: false, error: 'Assistant ID לא נמצא ❌' };
+    return { connected: false, error: e.message };
   }
-  if (response.status === 401) return { connected: false, error: 'API Key שגוי ❌' };
-  if (response.status === 404) return { connected: false, error: 'Assistant ID לא נמצא ❌' };
-  return { connected: false, error: `שגיאה ${response.status}` };
+}
+
+/** Create a new Vapi Assistant from a script */
+export async function vapiCreateAssistant({ apiKey, name, systemPrompt, firstMessage, language }) {
+  const deepgramLang = language === 'ar' ? 'ar' : 'he';
+  return vapiRequest({
+    apiKey,
+    method: 'POST',
+    path: '/assistant',
+    body: {
+      name,
+      model: {
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-5',
+        messages: [{ role: 'system', content: systemPrompt }],
+      },
+      voice: {
+        provider: '11labs',
+        voiceId: language === 'ar' ? 'Arabic_Voice' : 'Elliot',
+      },
+      transcriber: {
+        provider: 'deepgram',
+        model: 'nova-3',
+        language: deepgramLang,
+      },
+      firstMessage: firstMessage || '',
+    },
+  });
+}
+
+/** Update an existing Vapi Assistant */
+export async function vapiUpdateAssistant({ apiKey, assistantId, name, systemPrompt, firstMessage, language }) {
+  const deepgramLang = language === 'ar' ? 'ar' : 'he';
+  return vapiRequest({
+    apiKey,
+    method: 'PATCH',
+    path: `/assistant/${assistantId}`,
+    body: {
+      name,
+      model: {
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-5',
+        messages: [{ role: 'system', content: systemPrompt }],
+      },
+      voice: {
+        provider: '11labs',
+        voiceId: language === 'ar' ? 'Arabic_Voice' : 'Elliot',
+      },
+      transcriber: {
+        provider: 'deepgram',
+        model: 'nova-3',
+        language: deepgramLang,
+      },
+      firstMessage: firstMessage || '',
+    },
+  });
+}
+
+/** Delete a Vapi Assistant */
+export async function vapiDeleteAssistant({ apiKey, assistantId }) {
+  const response = await fetch(`${VAPI_BASE}/assistant/${assistantId}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${apiKey}` },
+  });
+  return response.ok;
 }

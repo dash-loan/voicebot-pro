@@ -17,7 +17,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import ClientManagement from './pages/ClientManagement';
 import ScriptList from './pages/ScriptList';
 import ScriptBuilder from './pages/ScriptBuilder';
-import TTSBuilder from './pages/TTSBuilder';
+
 import VirtualNumbers from './pages/VirtualNumbers';
 import ClientDashboard from './pages/ClientDashboard';
 import Campaigns from './pages/Campaigns';
@@ -78,7 +78,7 @@ const AuthenticatedApp = () => {
             <Route path="/admin/campaigns" element={<AllCampaigns />} />
             <Route path="/admin/scripts" element={<ScriptList />} />
             <Route path="/admin/scripts/:scriptId" element={<ScriptBuilder />} />
-            <Route path="/admin/tts" element={<TTSBuilder />} />
+
             <Route path="/admin/numbers" element={<VirtualNumbers />} />
             <Route path="/admin/profitability" element={<Profitability />} />
             <Route path="/admin/vapi-events" element={<VapiEvents />} />

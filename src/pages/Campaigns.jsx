@@ -26,7 +26,7 @@ export default function Campaigns() {
   const fileInputRef = useRef(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ name: '', script_id: '', dialing_start: '09:00', dialing_end: '20:00', max_concurrent: 5, max_retries: 2 });
+  const [form, setForm] = useState({ name: '', script_id: '', virtual_number_id: '', dialing_start: '09:00', dialing_end: '20:00', max_concurrent: 5, max_retries: 2 });
   const [contacts, setContacts] = useState([]);
   const [uploadPreview, setUploadPreview] = useState(null); // { valid, invalid, duplicates }
 
@@ -44,15 +44,22 @@ export default function Campaigns() {
     enabled: !!user?.id
   });
 
+  const { data: virtualNumbers = [] } = useQuery({
+    queryKey: ['virtualNumbers'],
+    queryFn: () => base44.entities.VirtualNumber.filter({ status: 'active' }),
+  });
+
   const createCampaign = useMutation({
     mutationFn: async () => {
+      const selectedScript = scripts.find(s => s.id === form.script_id);
       const campaign = await base44.entities.Campaign.create({
         ...form,
         client_id: user.id,
         status: 'draft',
         total_contacts: contacts.length,
         dialed_contacts: 0,
-        answered_contacts: 0
+        answered_contacts: 0,
+        vapi_assistant_id: selectedScript?.vapi_assistant_id || '',
       });
       if (contacts.length > 0) {
         await base44.entities.Contact.bulkCreate(
@@ -156,6 +163,16 @@ export default function Campaigns() {
                     </SelectContent>
                   </Select>
                   {scripts.length === 0 && <p className="text-xs text-muted-foreground">אין תסריטים זמינים. פנה למנהל המערכת.</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label>מספר טלפון וירטואלי</Label>
+                  <Select value={form.virtual_number_id} onValueChange={v => setForm({ ...form, virtual_number_id: v })}>
+                    <SelectTrigger><SelectValue placeholder="בחר מספר" /></SelectTrigger>
+                    <SelectContent>
+                      {virtualNumbers.map(n => <SelectItem key={n.id} value={n.id}>{n.phone_number}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {virtualNumbers.length === 0 && <p className="text-xs text-muted-foreground">אין מספרים פעילים. פנה למנהל המערכת.</p>}
                 </div>
               </div>
             )}

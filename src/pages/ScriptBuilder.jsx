@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Save, Plus, Trash2, ArrowRight, CheckCircle, PlayCircle, ArrowLeft } from 'lucide-react';
+import { vapiCreateAssistant, vapiUpdateAssistant } from '@/utils/vapiClient';
+import { Save, ArrowRight, Bot, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,8 +12,9 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
+
+const INITIAL_FORM = { name: '', description: '', language: 'he', system_prompt: '', first_message: '', status: 'draft', assigned_client_id: '', vapi_assistant_id: '' };
 
 export default function ScriptBuilder() {
   const { scriptId } = useParams();
@@ -20,109 +22,102 @@ export default function ScriptBuilder() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
-  const [script, setScript] = useState({ name: '', description: '', status: 'draft', assigned_client_id: '' });
-  const [nodes, setNodes] = useState([]);
-  const [nodeDialogOpen, setNodeDialogOpen] = useState(false);
-  const [editingNode, setEditingNode] = useState(null);
-  const [nodeForm, setNodeForm] = useState({ node_label: '', text: '', is_start: false, is_end: false, yes_next: '', no_next: '', no_answer_next: '', audio_asset_id: '' });
+  const [form, setForm] = useState(INITIAL_FORM);
 
   const { data: existingScript } = useQuery({
     queryKey: ['script', scriptId],
     queryFn: () => base44.entities.Script.get(scriptId),
-    enabled: !isNew
-  });
-
-  const { data: existingNodes = [] } = useQuery({
-    queryKey: ['scriptNodes', scriptId],
-    queryFn: () => base44.entities.ScriptNode.filter({ script_id: scriptId }),
-    enabled: !isNew
+    enabled: !isNew,
   });
 
   const { data: users = [] } = useQuery({
     queryKey: ['users'],
-    queryFn: () => base44.entities.User.filter({ role: 'user' })
+    queryFn: () => base44.entities.User.filter({ role: 'user' }),
   });
 
-  const { data: audioAssets = [] } = useQuery({
-    queryKey: ['audioAssets'],
-    queryFn: () => base44.entities.AudioAsset.list()
+  const { data: vapiConfigs = [] } = useQuery({
+    queryKey: ['vapiConfigs'],
+    queryFn: () => base44.entities.VapiConfig.list(),
   });
 
   useEffect(() => {
-    if (existingScript) setScript(existingScript);
-    if (existingNodes.length) setNodes(existingNodes);
-  }, [existingScript, existingNodes]);
+    if (existingScript) setForm({ ...INITIAL_FORM, ...existingScript });
+  }, [existingScript]);
+
+  const apiKey = vapiConfigs[0]?.vapi_api_key;
+
+  const validate = () => {
+    if (!form.name.trim()) return 'נא להזין שם תסריט';
+    if (!form.system_prompt.trim()) return 'נא להזין System Prompt';
+    if (!form.first_message.trim()) return 'נא להזין הודעה ראשונה';
+    if (!apiKey) return 'לא הוגדר Vapi API Key – עבור להגדרות מערכת';
+    return null;
+  };
 
   const saveScript = useMutation({
     mutationFn: async () => {
-      let id = scriptId;
-      if (isNew) {
-        const created = await base44.entities.Script.create(script);
-        id = created.id;
+      const err = validate();
+      if (err) throw new Error(err);
+
+      let vapiAssistantId = form.vapi_assistant_id;
+
+      // Create or update assistant in Vapi
+      if (vapiAssistantId) {
+        await vapiUpdateAssistant({
+          apiKey,
+          assistantId: vapiAssistantId,
+          name: form.name,
+          systemPrompt: form.system_prompt,
+          firstMessage: form.first_message,
+          language: form.language,
+        });
       } else {
-        await base44.entities.Script.update(scriptId, script);
+        const vapiResult = await vapiCreateAssistant({
+          apiKey,
+          name: form.name,
+          systemPrompt: form.system_prompt,
+          firstMessage: form.first_message,
+          language: form.language,
+        });
+        vapiAssistantId = vapiResult.id;
       }
-      // Save nodes
-      const existingIds = existingNodes.map(n => n.id);
-      const currentIds = nodes.filter(n => n.id).map(n => n.id);
-      // Delete removed nodes
-      for (const oldId of existingIds) {
-        if (!currentIds.includes(oldId)) await base44.entities.ScriptNode.delete(oldId);
+
+      const scriptData = {
+        name: form.name,
+        description: form.description,
+        language: form.language,
+        system_prompt: form.system_prompt,
+        first_message: form.first_message,
+        status: form.status,
+        assigned_client_id: form.assigned_client_id || null,
+        vapi_assistant_id: vapiAssistantId,
+      };
+
+      if (isNew) {
+        const created = await base44.entities.Script.create(scriptData);
+        return created.id;
+      } else {
+        await base44.entities.Script.update(scriptId, scriptData);
+        setForm(f => ({ ...f, vapi_assistant_id: vapiAssistantId }));
+        return scriptId;
       }
-      // Create/update nodes
-      for (const node of nodes) {
-        const nodeData = { ...node, script_id: id };
-        delete nodeData.id;
-        if (node.id && existingIds.includes(node.id)) {
-          await base44.entities.ScriptNode.update(node.id, nodeData);
-        } else {
-          await base44.entities.ScriptNode.create(nodeData);
-        }
-      }
-      return id;
     },
     onSuccess: (id) => {
       queryClient.invalidateQueries({ queryKey: ['scripts'] });
-      queryClient.invalidateQueries({ queryKey: ['scriptNodes'] });
-      toast({ title: 'התסריט נשמר בהצלחה' });
+      queryClient.invalidateQueries({ queryKey: ['script', scriptId] });
+      toast({ title: '✅ התסריט נשמר ו-Assistant עודכן ב-Vapi' });
       if (isNew) navigate(`/admin/scripts/${id}`, { replace: true });
-    }
+    },
+    onError: (e) => {
+      toast({ title: 'שגיאה', description: e.message, variant: 'destructive' });
+    },
   });
 
-  const openNodeDialog = (node = null, index = null) => {
-    if (node) {
-      setEditingNode(index);
-      setNodeForm({ ...node });
-    } else {
-      setEditingNode(null);
-      setNodeForm({ node_label: `צומת ${nodes.length + 1}`, text: '', is_start: nodes.length === 0, is_end: false, yes_next: '', no_next: '', no_answer_next: '', audio_asset_id: '' });
-    }
-    setNodeDialogOpen(true);
-  };
-
-  const saveNode = () => {
-    if (editingNode !== null) {
-      const updated = [...nodes];
-      updated[editingNode] = { ...updated[editingNode], ...nodeForm };
-      setNodes(updated);
-    } else {
-      setNodes([...nodes, { ...nodeForm, order: nodes.length }]);
-    }
-    setNodeDialogOpen(false);
-  };
-
-  const deleteNode = (index) => {
-    setNodes(nodes.filter((_, i) => i !== index));
-  };
-
-  const getNodeLabel = (nodeId) => {
-    const node = nodes.find(n => (n.id || n.node_label) === nodeId);
-    return node?.node_label || nodeId || '-';
-  };
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate('/admin/scripts')}>
@@ -130,160 +125,130 @@ export default function ScriptBuilder() {
           </Button>
           <div>
             <h1 className="text-3xl font-bold">{isNew ? 'תסריט חדש' : 'עריכת תסריט'}</h1>
-            <p className="text-muted-foreground mt-1">{nodes.length} צמתים</p>
+            <p className="text-muted-foreground mt-1">כל תסריט יוצר Vapi Assistant ייעודי</p>
           </div>
         </div>
-        <Button onClick={() => saveScript.mutate()} disabled={!script.name || saveScript.isPending} className="gap-2">
-          <Save className="w-4 h-4" /> {saveScript.isPending ? 'שומר...' : 'שמור'}
-        </Button>
+        <div className="flex items-center gap-3">
+          {form.vapi_assistant_id && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+              <CheckCircle2 className="w-4 h-4" />
+              <span className="font-mono text-xs">{form.vapi_assistant_id.slice(0, 16)}...</span>
+            </div>
+          )}
+          {!apiKey && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              <AlertCircle className="w-4 h-4" /> Vapi API Key חסר
+            </div>
+          )}
+          <Button onClick={() => saveScript.mutate()} disabled={saveScript.isPending} className="gap-2 min-w-[100px]">
+            <Save className="w-4 h-4" />
+            {saveScript.isPending ? 'שומר ב-Vapi...' : 'שמור'}
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-1">
+        {/* Left: Script Details */}
+        <Card>
           <CardHeader><CardTitle>פרטי תסריט</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>שם התסריט</Label>
-              <Input value={script.name} onChange={e => setScript({ ...script, name: e.target.value })} placeholder="תסריט מכירות" />
+              <Label>שם התסריט *</Label>
+              <Input value={form.name} onChange={e => set('name', e.target.value)} placeholder="תסריט מכירות – מוצר X" />
             </div>
             <div className="space-y-2">
-              <Label>תיאור</Label>
-              <Textarea value={script.description || ''} onChange={e => setScript({ ...script, description: e.target.value })} placeholder="תיאור קצר..." rows={3} />
+              <Label>שפת הסוכן *</Label>
+              <Select value={form.language} onValueChange={v => set('language', v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="he">🇮🇱 עברית</SelectItem>
+                  <SelectItem value="ar">🇸🇦 ערבית</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>לקוח מוקצה</Label>
-              <Select value={script.assigned_client_id || ''} onValueChange={v => setScript({ ...script, assigned_client_id: v })}>
-                <SelectTrigger><SelectValue placeholder="בחר לקוח" /></SelectTrigger>
+              <Select value={form.assigned_client_id || '_none'} onValueChange={v => set('assigned_client_id', v === '_none' ? '' : v)}>
+                <SelectTrigger><SelectValue placeholder="כל הלקוחות" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={null}>לא הוקצה</SelectItem>
+                  <SelectItem value="_none">ללא הקצאה</SelectItem>
                   {users.map(u => <SelectItem key={u.id} value={u.id}>{u.full_name || u.email}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center justify-between">
-              <Label>סטטוס פעיל</Label>
-              <Switch checked={script.status === 'active'} onCheckedChange={v => setScript({ ...script, status: v ? 'active' : 'draft' })} />
+            <div className="space-y-2">
+              <Label>תיאור (פנימי)</Label>
+              <Textarea value={form.description || ''} onChange={e => set('description', e.target.value)} placeholder="הערות פנימיות..." rows={2} />
             </div>
+            <div className="flex items-center justify-between pt-2 border-t">
+              <Label>תסריט פעיל</Label>
+              <Switch checked={form.status === 'active'} onCheckedChange={v => set('status', v ? 'active' : 'draft')} />
+            </div>
+            {form.status === 'draft' && (
+              <p className="text-xs text-muted-foreground">טיוטה = לקוחות לא יכולים לבחור תסריט זה בקמפיין</p>
+            )}
           </CardContent>
         </Card>
 
+        {/* Right: AI Prompt */}
         <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>צמתי שיחה</CardTitle>
-            <Button size="sm" onClick={() => openNodeDialog()} className="gap-2"><Plus className="w-4 h-4" /> הוסף צומת</Button>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bot className="w-5 h-5 text-primary" />
+              הגדרות הסוכן AI
+            </CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              הטקסט כאן הופך להוראות הסוכן AI שמתנהל בשיחה בפועל
+            </p>
           </CardHeader>
-          <CardContent>
-            {nodes.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <p>אין צמתים עדיין</p>
-                <Button variant="outline" className="mt-4" onClick={() => openNodeDialog()}>הוסף צומת ראשון</Button>
+          <CardContent className="space-y-5">
+            <div className="space-y-2">
+              <Label className="text-base font-semibold">הודעה ראשונה *</Label>
+              <p className="text-xs text-muted-foreground">המשפט הראשון שהסוכן אומר כשהלקוח עונה</p>
+              <Textarea
+                value={form.first_message}
+                onChange={e => set('first_message', e.target.value)}
+                placeholder='לדוגמה: "שלום, אני מתקשר בשם חברת X. האם יש לך רגע לשיחה קצרה?"'
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-base font-semibold">System Prompt – הוראות לסוכן *</Label>
+              <p className="text-xs text-muted-foreground">
+                כתוב כאן את הוראות הסוכן המלאות: מה למכור, איך להגיב, מה לא לומר, איך לסגור עסקה
+              </p>
+              <Textarea
+                value={form.system_prompt}
+                onChange={e => set('system_prompt', e.target.value)}
+                placeholder={`לדוגמה:\nאתה סוכן מכירות של חברת X המתמחה בביטוח חיים.\nמטרתך: לזהות אנשים שמעוניינים לשמוע עוד על מוצרי הביטוח שלנו.\n\nהוראות:\n1. היה ידידותי אך מקצועי\n2. אם הלקוח מעוניין, בקש שם ומספר לחזרה\n3. אם לא מעוניין, סיים בנימוס`}
+                rows={14}
+                className="font-mono text-sm resize-y"
+              />
+              {form.system_prompt.length > 0 && (
+                <p className="text-xs text-muted-foreground">{form.system_prompt.length} תווים</p>
+              )}
+            </div>
+
+            {form.vapi_assistant_id && (
+              <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-green-700">Assistant מחובר ל-Vapi ✓</p>
+                  <p className="text-xs text-green-600 font-mono">{form.vapi_assistant_id}</p>
+                </div>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {nodes.map((node, idx) => (
-                  <div key={idx} className="border rounded-lg p-4 bg-card hover:shadow-sm transition-shadow">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="font-semibold">{node.node_label}</span>
-                          {node.is_start && <Badge variant="outline" className="gap-1"><PlayCircle className="w-3 h-3" /> התחלה</Badge>}
-                          {node.is_end && <Badge variant="outline" className="gap-1"><CheckCircle className="w-3 h-3" /> סיום</Badge>}
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-3">{node.text}</p>
-                        {!node.is_end && (
-                          <div className="flex flex-wrap gap-4 text-xs">
-                            <span><strong>כן →</strong> {getNodeLabel(node.yes_next)}</span>
-                            <span><strong>לא →</strong> {getNodeLabel(node.no_next)}</span>
-                            <span><strong>אין מענה →</strong> {getNodeLabel(node.no_answer_next)}</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex gap-2 mr-4">
-                        <Button size="sm" variant="ghost" onClick={() => openNodeDialog(node, idx)}>עריכה</Button>
-                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteNode(idx)}><Trash2 className="w-4 h-4" /></Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+            )}
+            {!form.vapi_assistant_id && !isNew && (
+              <div className="flex items-center gap-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0" />
+                <p className="text-sm text-yellow-700">תסריט זה טרם נוצר ב-Vapi. לחץ "שמור" כדי ליצור אותו.</p>
               </div>
             )}
           </CardContent>
         </Card>
       </div>
-
-      <Dialog open={nodeDialogOpen} onOpenChange={setNodeDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>{editingNode !== null ? 'עריכת צומת' : 'צומת חדש'}</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>תווית צומת</Label>
-              <Input value={nodeForm.node_label} onChange={e => setNodeForm({ ...nodeForm, node_label: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>טקסט שאלה/הצהרה</Label>
-              <Textarea value={nodeForm.text} onChange={e => setNodeForm({ ...nodeForm, text: e.target.value })} rows={3} />
-            </div>
-            <div className="space-y-2">
-              <Label>קובץ שמע (אופציונלי)</Label>
-              <Select value={nodeForm.audio_asset_id || ''} onValueChange={v => setNodeForm({ ...nodeForm, audio_asset_id: v })}>
-                <SelectTrigger><SelectValue placeholder="בחר קובץ שמע" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={null}>ללא</SelectItem>
-                  {audioAssets.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex gap-6">
-              <div className="flex items-center gap-2">
-                <Switch checked={nodeForm.is_start} onCheckedChange={v => setNodeForm({ ...nodeForm, is_start: v })} />
-                <Label>צומת התחלה</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch checked={nodeForm.is_end} onCheckedChange={v => setNodeForm({ ...nodeForm, is_end: v })} />
-                <Label>צומת סיום</Label>
-              </div>
-            </div>
-            {!nodeForm.is_end && (
-              <>
-                <div className="space-y-2">
-                  <Label>כן → עבור לצומת</Label>
-                  <Select value={nodeForm.yes_next || ''} onValueChange={v => setNodeForm({ ...nodeForm, yes_next: v })}>
-                    <SelectTrigger><SelectValue placeholder="בחר צומת" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={null}>-</SelectItem>
-                      {nodes.filter((_, i) => i !== editingNode).map((n, i) => <SelectItem key={i} value={n.id || n.node_label}>{n.node_label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>לא → עבור לצומת</Label>
-                  <Select value={nodeForm.no_next || ''} onValueChange={v => setNodeForm({ ...nodeForm, no_next: v })}>
-                    <SelectTrigger><SelectValue placeholder="בחר צומת" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={null}>-</SelectItem>
-                      {nodes.filter((_, i) => i !== editingNode).map((n, i) => <SelectItem key={i} value={n.id || n.node_label}>{n.node_label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>אין מענה/תא קולי → עבור לצומת</Label>
-                  <Select value={nodeForm.no_answer_next || ''} onValueChange={v => setNodeForm({ ...nodeForm, no_answer_next: v })}>
-                    <SelectTrigger><SelectValue placeholder="בחר צומת" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={null}>-</SelectItem>
-                      {nodes.filter((_, i) => i !== editingNode).map((n, i) => <SelectItem key={i} value={n.id || n.node_label}>{n.node_label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNodeDialogOpen(false)}>ביטול</Button>
-            <Button onClick={saveNode} disabled={!nodeForm.node_label || !nodeForm.text}>שמור</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
