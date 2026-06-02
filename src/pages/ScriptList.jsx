@@ -78,6 +78,9 @@ export default function ScriptList() {
 
   const langLabel = { he: '🇮🇱 עברית', ar: '🇸🇦 ערבית' };
 
+  const activeCount = scripts.filter(s => s.status === 'active').length;
+  const withVapiCount = scripts.filter(s => s.vapi_assistant_id).length;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -94,6 +97,22 @@ export default function ScriptList() {
           <Button className="gap-2" onClick={() => navigate('/admin/scripts/new')}>
             <Plus className="w-4 h-4" /> צור תסריט חדש
           </Button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="border rounded-xl p-4 bg-card">
+          <p className="text-sm text-muted-foreground">סה"כ תסריטים</p>
+          <p className="text-3xl font-bold text-primary">{scripts.length}</p>
+        </div>
+        <div className="border rounded-xl p-4 bg-green-50 border-green-200">
+          <p className="text-sm text-muted-foreground">פעילים</p>
+          <p className="text-3xl font-bold text-green-700">{activeCount}</p>
+        </div>
+        <div className="border rounded-xl p-4 bg-blue-50 border-blue-200">
+          <p className="text-sm text-muted-foreground">מחוברים ל-Vapi</p>
+          <p className="text-3xl font-bold text-blue-700">{withVapiCount}</p>
         </div>
       </div>
 

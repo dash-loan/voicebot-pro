@@ -115,6 +115,13 @@ export default function ClientManagement() {
     };
   };
 
+  const activeUsers = users.filter(u => u.status !== 'blocked').length;
+  const noMinutesUsers = users.filter(u => {
+    const cm = clientMinutes.find(c => c.client_id === u.id);
+    return !cm || (cm.total_minutes - cm.used_minutes) <= 0;
+  }).length;
+  const totalMinutesRemaining = clientMinutes.reduce((s, cm) => s + Math.max(0, (cm.total_minutes || 0) - (cm.used_minutes || 0)), 0);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -142,6 +149,26 @@ export default function ClientManagement() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="border rounded-xl p-4 bg-card">
+          <p className="text-sm text-muted-foreground">סה"כ לקוחות</p>
+          <p className="text-3xl font-bold text-primary">{users.length}</p>
+        </div>
+        <div className="border rounded-xl p-4 bg-green-50 border-green-200">
+          <p className="text-sm text-muted-foreground">פעילים</p>
+          <p className="text-3xl font-bold text-green-700">{activeUsers}</p>
+        </div>
+        <div className="border rounded-xl p-4 bg-red-50 border-red-200">
+          <p className="text-sm text-muted-foreground">ללא דקות</p>
+          <p className="text-3xl font-bold text-red-600">{noMinutesUsers}</p>
+        </div>
+        <div className="border rounded-xl p-4 bg-blue-50 border-blue-200">
+          <p className="text-sm text-muted-foreground">דקות נותרות (כולל)</p>
+          <p className="text-3xl font-bold text-blue-700">{Math.round(totalMinutesRemaining).toLocaleString()}</p>
+        </div>
       </div>
 
       <Card>

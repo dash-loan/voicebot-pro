@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Megaphone, Play, Pause, Eye, Upload, Trash2 } from 'lucide-react';
+import { Plus, Megaphone, Play, Pause, Eye, Upload, Trash2, Flame } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/components/ui/use-toast';
+import { Progress } from '@/components/ui/progress';
 import { validateIsraeliMobile } from '@/utils/phoneUtils';
 
 const statusLabels = { draft: 'טיוטה', pending_vapi: 'בהכנה', active: 'פעיל', paused: 'עצור', completed: 'הושלם' };
@@ -57,6 +58,12 @@ export default function Campaigns() {
   const { data: virtualNumbers = [] } = useQuery({
     queryKey: ['virtualNumbers'],
     queryFn: () => base44.entities.VirtualNumber.filter({ status: 'active' }),
+  });
+
+  const { data: callLogs = [] } = useQuery({
+    queryKey: ['myCallLogs', user?.id],
+    queryFn: () => base44.entities.CallLog.filter({ client_id: user?.id }),
+    enabled: !!user?.id,
   });
 
   const createCampaign = useMutation({
@@ -149,12 +156,15 @@ export default function Campaigns() {
     reader.readAsText(file);
   };
 
+  const activeCount = campaigns.filter(c => c.status === 'active').length;
+  const getCampaignHotLeads = (cid) => callLogs.filter(l => l.campaign_id === cid && l.lead_quality === 'hot_lead').length;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">קמפיינים</h1>
-          <p className="text-muted-foreground mt-1">{campaigns.length} קמפיינים</p>
+          <p className="text-muted-foreground mt-1">{campaigns.length} קמפיינים · {activeCount} פעילים</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
@@ -272,22 +282,40 @@ export default function Campaigns() {
                 <TableRow>
                   <TableHead>שם</TableHead>
                   <TableHead>סטטוס</TableHead>
-                  <TableHead>אנשי קשר</TableHead>
-                  <TableHead>חויגו</TableHead>
-                  <TableHead>ענו</TableHead>
+                  <TableHead>התקדמות</TableHead>
+                  <TableHead>לידים חמים</TableHead>
                   <TableHead>פעולות</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {campaigns.map(campaign => (
+                {campaigns.map(campaign => {
+                  const progress = campaign.total_contacts > 0 ? Math.round((campaign.dialed_contacts / campaign.total_contacts) * 100) : 0;
+                  const hotLeads = getCampaignHotLeads(campaign.id);
+                  return (
                   <TableRow key={campaign.id}>
-                    <TableCell className="font-medium">{campaign.name}</TableCell>
+                    <TableCell>
+                      <p className="font-medium">{campaign.name}</p>
+                      <p className="text-xs text-muted-foreground">{campaign.dialing_start} – {campaign.dialing_end}</p>
+                    </TableCell>
                     <TableCell>
                       <Badge variant={statusColors[campaign.status]}>{statusLabels[campaign.status]}</Badge>
                     </TableCell>
-                    <TableCell>{campaign.total_contacts || 0}</TableCell>
-                    <TableCell>{campaign.dialed_contacts || 0}</TableCell>
-                    <TableCell>{campaign.answered_contacts || 0}</TableCell>
+                    <TableCell className="min-w-[160px]">
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>{campaign.dialed_contacts || 0} / {campaign.total_contacts || 0}</span>
+                          <span>{progress}%</span>
+                        </div>
+                        <Progress value={progress} className="h-2" />
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {hotLeads > 0 ? (
+                        <span className="flex items-center gap-1 text-orange-600 font-semibold">
+                          <Flame className="w-4 h-4" /> {hotLeads}
+                        </span>
+                      ) : <span className="text-muted-foreground text-sm">—</span>}
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Button size="sm" variant="outline" onClick={() => navigate(`/campaigns/${campaign.id}`)}><Eye className="w-4 h-4" /></Button>
@@ -314,7 +342,8 @@ export default function Campaigns() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           )}

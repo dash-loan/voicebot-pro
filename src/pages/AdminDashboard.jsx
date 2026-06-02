@@ -247,7 +247,7 @@ export default function AdminDashboard() {
           { to: '/admin/clients', icon: Users, label: 'לקוחות' },
           { to: '/admin/campaigns', icon: PhoneCall, label: 'קמפיינים' },
           { to: '/admin/scripts', icon: FileText, label: 'תסריטים' },
-          { to: '/admin/tts', icon: Mic, label: 'בונה קול' },
+          { to: '/admin/scripts', icon: Mic, label: 'בונה קול' },
           { to: '/admin/numbers', icon: Phone, label: 'מספרים' },
           { to: '/admin/profitability', icon: TrendingUp, label: 'רווחיות' },
         ].map(a => (
