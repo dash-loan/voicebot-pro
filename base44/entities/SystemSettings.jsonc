@@ -1,0 +1,28 @@
+{
+  "name": "SystemSettings",
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string",
+      "title": "\u05de\u05e4\u05ea\u05d7 \u05d4\u05d2\u05d3\u05e8\u05d4"
+    },
+    "vapi_per_min": {
+      "type": "number",
+      "title": "\u05e2\u05dc\u05d5\u05ea Vapi \u05dc\u05d3\u05e7\u05d4 ($)",
+      "default": 0.05
+    },
+    "twilio_per_min": {
+      "type": "number",
+      "title": "\u05e2\u05dc\u05d5\u05ea Twilio \u05dc\u05d3\u05e7\u05d4 ($)",
+      "default": 0.013
+    },
+    "sell_per_min": {
+      "type": "number",
+      "title": "\u05de\u05d7\u05d9\u05e8 \u05de\u05db\u05d9\u05e8\u05d4 \u05dc\u05d3\u05e7\u05d4 ($)",
+      "default": 0.25
+    }
+  },
+  "required": [
+    "key"
+  ]
+}

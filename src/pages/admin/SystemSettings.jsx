@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -13,16 +13,38 @@ export default function SystemSettings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: configs = [] } = useQuery({ queryKey: ['vapiConfigs'], queryFn: () => base44.entities.VapiConfig.list() });
+  const { data: configs = [] } = useQuery({
+    queryKey: ['vapiConfigs'],
+    queryFn: () => base44.entities.VapiConfig.list(),
+    staleTime: 60000,
+  });
   const config = configs[0];
 
+  const { data: settingsList = [] } = useQuery({
+    queryKey: ['systemSettings'],
+    queryFn: () => base44.entities.SystemSettings.filter({ key: 'pricing' }),
+    staleTime: 60000,
+  });
+  const pricingRecord = settingsList[0];
+
   const [vapi, setVapi] = useState({ key: '', assistantId: '', phoneNumberId: '' });
-  const [twilio, setTwilio] = useState({ accountSid: '', authToken: '' });
   const [pricing, setPricing] = useState({ vapiPerMin: '0.05', twilioPerMin: '0.013', sellPerMin: '0.25' });
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
+  const [testResultMsg, setTestResultMsg] = useState(null);
 
-  const save = useMutation({
+  // Sync pricing from DB when loaded
+  useEffect(() => {
+    if (pricingRecord) {
+      setPricing({
+        vapiPerMin: String(pricingRecord.vapi_per_min ?? 0.05),
+        twilioPerMin: String(pricingRecord.twilio_per_min ?? 0.013),
+        sellPerMin: String(pricingRecord.sell_per_min ?? 0.25),
+      });
+    }
+  }, [pricingRecord]);
+
+  const saveVapi = useMutation({
     mutationFn: async () => {
       const data = {
         client_id: 'admin',
@@ -34,10 +56,28 @@ export default function SystemSettings() {
       if (config) return base44.entities.VapiConfig.update(config.id, data);
       return base44.entities.VapiConfig.create(data);
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['vapiConfigs'] }); toast({ title: 'הגדרות נשמרו' }); }
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['vapiConfigs'] });
+      toast({ title: 'הגדרות Vapi נשמרו' });
+    }
   });
 
-  const [testResultMsg, setTestResultMsg] = useState(null);
+  const savePricing = useMutation({
+    mutationFn: async () => {
+      const data = {
+        key: 'pricing',
+        vapi_per_min: parseFloat(pricing.vapiPerMin),
+        twilio_per_min: parseFloat(pricing.twilioPerMin),
+        sell_per_min: parseFloat(pricing.sellPerMin),
+      };
+      if (pricingRecord) return base44.entities.SystemSettings.update(pricingRecord.id, data);
+      return base44.entities.SystemSettings.create(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['systemSettings'] });
+      toast({ title: 'הגדרות תמחור נשמרו ✅' });
+    }
+  });
 
   const testVapi = async () => {
     setTesting(true); setTestResult(null); setTestResultMsg(null);
@@ -66,6 +106,7 @@ export default function SystemSettings() {
   };
 
   const webhookUrl = `${window.location.origin}/api/functions/vapiWebhook`;
+  const profit = (parseFloat(pricing.sellPerMin || 0) - parseFloat(pricing.vapiPerMin || 0) - parseFloat(pricing.twilioPerMin || 0)).toFixed(3);
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -86,18 +127,39 @@ export default function SystemSettings() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label>API Key</Label>
-            <Input type="password" value={vapi.key} onChange={e => setVapi({ ...vapi, key: e.target.value })} placeholder={config?.vapi_api_key ? '••••••••' : 'sk-vapi-...'} />
+            <Input
+              type="password"
+              value={vapi.key}
+              onChange={e => setVapi({ ...vapi, key: e.target.value })}
+              placeholder={config?.vapi_api_key ? '••••••••  (שמור)' : 'sk-vapi-...'}
+            />
           </div>
           <div className="space-y-2">
             <Label>Assistant ID (ברירת מחדל)</Label>
-            <Input value={vapi.assistantId} onChange={e => setVapi({ ...vapi, assistantId: e.target.value })} placeholder={config?.vapi_assistant_id || 'asst-...'} />
+            <Input
+              value={vapi.assistantId}
+              onChange={e => setVapi({ ...vapi, assistantId: e.target.value })}
+              placeholder={config?.vapi_assistant_id || 'asst-...'}
+              dir="ltr"
+            />
+            {config?.vapi_assistant_id && !vapi.assistantId && (
+              <p className="text-xs text-muted-foreground">נוכחי: {config.vapi_assistant_id}</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label>Phone Number ID (Vapi)</Label>
-            <Input value={vapi.phoneNumberId} onChange={e => setVapi({ ...vapi, phoneNumberId: e.target.value })} placeholder={config?.vapi_phone_number_id || 'pn-...'} />
+            <Input
+              value={vapi.phoneNumberId}
+              onChange={e => setVapi({ ...vapi, phoneNumberId: e.target.value })}
+              placeholder={config?.vapi_phone_number_id || 'pn-...'}
+              dir="ltr"
+            />
+            {config?.vapi_phone_number_id && !vapi.phoneNumberId && (
+              <p className="text-xs text-muted-foreground">נוכחי: {config.vapi_phone_number_id}</p>
+            )}
           </div>
           <div className="flex gap-2">
-            <Button onClick={() => save.mutate()} disabled={save.isPending}>שמור</Button>
+            <Button onClick={() => saveVapi.mutate()} disabled={saveVapi.isPending}>שמור</Button>
             <Button variant="outline" onClick={testVapi} disabled={testing}>{testing ? 'בודק...' : 'בדוק חיבור'}</Button>
           </div>
           {testResult === 'success' && <p className="text-green-600 text-sm flex items-center gap-1"><CheckCircle className="w-4 h-4" /> {testResultMsg}</p>}
@@ -115,18 +177,14 @@ export default function SystemSettings() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Phone className="w-5 h-5 text-blue-500" /> Twilio</CardTitle>
-          <CardDescription>פרטי חשבון Twilio לניהול מספרים</CardDescription>
+          <CardDescription>פרטי חשבון Twilio לניהול מספרים — מאוחסן ב-Secrets</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Account SID</Label>
-            <Input value={twilio.accountSid} onChange={e => setTwilio({ ...twilio, accountSid: e.target.value })} placeholder="ACxxxxxxx..." />
+        <CardContent>
+          <div className="bg-muted p-3 rounded text-sm text-muted-foreground space-y-1">
+            <p>✅ TWILIO_ACCOUNT_SID — מוגדר</p>
+            <p>✅ TWILIO_AUTH_TOKEN — מוגדר</p>
+            <p className="text-xs mt-2">לשינוי: Dashboard → Settings → Environment Variables</p>
           </div>
-          <div className="space-y-2">
-            <Label>Auth Token</Label>
-            <Input type="password" value={twilio.authToken} onChange={e => setTwilio({ ...twilio, authToken: e.target.value })} placeholder="••••••••" />
-          </div>
-          <Button onClick={() => toast({ title: 'Twilio credentials יישמרו לאחר חיבור Backend' })} variant="outline">שמור</Button>
         </CardContent>
       </Card>
 
@@ -134,27 +192,47 @@ export default function SystemSettings() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><DollarSign className="w-5 h-5 text-green-500" /> תמחור</CardTitle>
-          <CardDescription>עלויות ומחיר מכירה לדקה (USD)</CardDescription>
+          <CardDescription>עלויות ומחיר מכירה לדקה (USD) — נשמר ב-DB</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>עלות Vapi/דקה ($)</Label>
-              <Input value={pricing.vapiPerMin} onChange={e => setPricing({ ...pricing, vapiPerMin: e.target.value })} type="number" step="0.001" />
+              <Input
+                value={pricing.vapiPerMin}
+                onChange={e => setPricing({ ...pricing, vapiPerMin: e.target.value })}
+                type="number"
+                step="0.001"
+                min="0"
+              />
             </div>
             <div className="space-y-2">
               <Label>עלות Twilio/דקה ($)</Label>
-              <Input value={pricing.twilioPerMin} onChange={e => setPricing({ ...pricing, twilioPerMin: e.target.value })} type="number" step="0.001" />
+              <Input
+                value={pricing.twilioPerMin}
+                onChange={e => setPricing({ ...pricing, twilioPerMin: e.target.value })}
+                type="number"
+                step="0.001"
+                min="0"
+              />
             </div>
             <div className="space-y-2">
               <Label>מחיר מכירה/דקה ($)</Label>
-              <Input value={pricing.sellPerMin} onChange={e => setPricing({ ...pricing, sellPerMin: e.target.value })} type="number" step="0.01" />
+              <Input
+                value={pricing.sellPerMin}
+                onChange={e => setPricing({ ...pricing, sellPerMin: e.target.value })}
+                type="number"
+                step="0.01"
+                min="0"
+              />
             </div>
           </div>
-          <div className="bg-muted p-3 rounded text-sm text-muted-foreground">
-            רווח לדקה: ${(parseFloat(pricing.sellPerMin || 0) - parseFloat(pricing.vapiPerMin || 0) - parseFloat(pricing.twilioPerMin || 0)).toFixed(3)}
+          <div className={`p-3 rounded text-sm font-medium ${parseFloat(profit) > 0 ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+            רווח לדקה: ${profit}
           </div>
-          <Button onClick={() => toast({ title: 'הגדרות תמחור נשמרו' })}>שמור</Button>
+          <Button onClick={() => savePricing.mutate()} disabled={savePricing.isPending}>
+            {savePricing.isPending ? 'שומר...' : 'שמור תמחור'}
+          </Button>
         </CardContent>
       </Card>
     </div>
