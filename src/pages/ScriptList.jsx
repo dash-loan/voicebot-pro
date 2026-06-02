@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, FileText, Bot, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, FileText, Bot, CheckCircle2, AlertCircle, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -110,6 +110,11 @@ export default function ScriptList() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
+                        {script.status === 'active' && (
+                          <Button size="sm" onClick={() => navigate(`/campaigns?script=${script.id}`)} className="gap-1 bg-green-600 hover:bg-green-700 text-white">
+                            <Rocket className="w-3.5 h-3.5" /> הפעל קמפיין
+                          </Button>
+                        )}
                         <Button size="sm" variant="outline" onClick={() => navigate(`/admin/scripts/${script.id}`)}>
                           <Edit className="w-4 h-4" />
                         </Button>
@@ -122,9 +127,7 @@ export default function ScriptList() {
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>מחיקת תסריט</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                האם למחוק את "{script.name}"? פעולה זו לא תמחק את ה-Assistant ב-Vapi עצמו.
-                              </AlertDialogDescription>
+                              <AlertDialogDescription>האם למחוק את "{script.name}"?</AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>ביטול</AlertDialogCancel>

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Link, useNavigate } from 'react-router-dom';
@@ -26,22 +26,32 @@ export default function Campaigns() {
   const fileInputRef = useRef(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ name: '', script_id: '', virtual_number_id: '', dialing_start: '09:00', dialing_end: '20:00', max_concurrent: 5, max_retries: 2 });
+  const scriptFromUrl = new URLSearchParams(window.location.search).get('script') || '';
+  const [form, setForm] = useState({ name: '', script_id: scriptFromUrl, virtual_number_id: '', start_date: '', dialing_start: '09:00', dialing_end: '20:00', max_concurrent: 5, max_retries: 2 });
+
+  useEffect(() => {
+    if (scriptFromUrl) setDialogOpen(true);
+  }, []);  // eslint-disable-line
   const [contacts, setContacts] = useState([]);
   const [uploadPreview, setUploadPreview] = useState(null); // { valid, invalid, duplicates }
 
   const { data: user } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
 
+  const isAdmin = user?.role === 'admin';
   const { data: campaigns = [], isLoading } = useQuery({
-    queryKey: ['myCampaigns', user?.id],
-    queryFn: () => base44.entities.Campaign.filter({ client_id: user?.id }, '-created_date'),
-    enabled: !!user?.id
+    queryKey: ['myCampaigns', user?.id, isAdmin],
+    queryFn: () => isAdmin
+      ? base44.entities.Campaign.list('-created_date')
+      : base44.entities.Campaign.filter({ client_id: user?.id }, '-created_date'),
+    enabled: !!user,
   });
 
   const { data: scripts = [] } = useQuery({
-    queryKey: ['myScripts', user?.id],
-    queryFn: () => base44.entities.Script.filter({ assigned_client_id: user?.id, status: 'active' }),
-    enabled: !!user?.id
+    queryKey: ['myScripts', user?.id, isAdmin],
+    queryFn: () => isAdmin
+      ? base44.entities.Script.filter({ status: 'active' })
+      : base44.entities.Script.filter({ assigned_client_id: user?.id, status: 'active' }),
+    enabled: !!user,
   });
 
   const { data: virtualNumbers = [] } = useQuery({
@@ -52,9 +62,17 @@ export default function Campaigns() {
   const createCampaign = useMutation({
     mutationFn: async () => {
       const selectedScript = scripts.find(s => s.id === form.script_id);
+      const clientId = isAdmin && form.target_client_id ? form.target_client_id : user.id;
       const campaign = await base44.entities.Campaign.create({
-        ...form,
-        client_id: user.id,
+        name: form.name,
+        script_id: form.script_id,
+        virtual_number_id: form.virtual_number_id,
+        start_date: form.start_date,
+        dialing_start: form.dialing_start,
+        dialing_end: form.dialing_end,
+        max_concurrent: form.max_concurrent,
+        max_retries: form.max_retries,
+        client_id: clientId,
         status: 'draft',
         total_contacts: contacts.length,
         dialed_contacts: 0,
@@ -144,28 +162,28 @@ export default function Campaigns() {
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>קמפיין חדש – שלב {step}/3</DialogTitle>
-              <DialogDescription>{step === 1 ? 'פרטי הקמפיין' : step === 2 ? 'העלאת רשימת לקוחות' : 'הגדרות חיוג'}</DialogDescription>
+              <DialogTitle>קמפיין חדש – שלב {step}/2</DialogTitle>
+              <DialogDescription>{step === 1 ? 'פרטי הקמפיין' : 'העלאת רשימת לקוחות'}</DialogDescription>
             </DialogHeader>
 
             {step === 1 && (
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label>שם הקמפיין</Label>
+                  <Label>שם הקמפיין *</Label>
                   <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="קמפיין מכירות ינואר" />
                 </div>
                 <div className="space-y-2">
-                  <Label>תסריט שיחה</Label>
+                  <Label>תסריט שיחה *</Label>
                   <Select value={form.script_id} onValueChange={v => setForm({ ...form, script_id: v })}>
                     <SelectTrigger><SelectValue placeholder="בחר תסריט" /></SelectTrigger>
                     <SelectContent>
                       {scripts.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  {scripts.length === 0 && <p className="text-xs text-muted-foreground">אין תסריטים זמינים. פנה למנהל המערכת.</p>}
+                  {scripts.length === 0 && <p className="text-xs text-muted-foreground">אין תסריטים פעילים. פנה למנהל המערכת.</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label>מספר טלפון וירטואלי</Label>
+                  <Label>מספר טלפון יוצא *</Label>
                   <Select value={form.virtual_number_id} onValueChange={v => setForm({ ...form, virtual_number_id: v })}>
                     <SelectTrigger><SelectValue placeholder="בחר מספר" /></SelectTrigger>
                     <SelectContent>
@@ -173,6 +191,16 @@ export default function Campaigns() {
                     </SelectContent>
                   </Select>
                   {virtualNumbers.length === 0 && <p className="text-xs text-muted-foreground">אין מספרים פעילים. פנה למנהל המערכת.</p>}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>תאריך התחלה *</Label>
+                    <Input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} min={new Date().toISOString().slice(0, 10)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>שעת התחלה</Label>
+                    <Input type="time" value={form.dialing_start} onChange={e => setForm({ ...form, dialing_start: e.target.value })} />
+                  </div>
                 </div>
               </div>
             )}
@@ -212,36 +240,15 @@ export default function Campaigns() {
               </div>
             )}
 
-            {step === 3 && (
-              <div className="space-y-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>שעת התחלה</Label>
-                    <Input type="time" value={form.dialing_start} onChange={e => setForm({ ...form, dialing_start: e.target.value })} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>שעת סיום</Label>
-                    <Input type="time" value={form.dialing_end} onChange={e => setForm({ ...form, dialing_end: e.target.value })} />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>שיחות במקביל: {form.max_concurrent}</Label>
-                  <Slider value={[form.max_concurrent]} onValueChange={([v]) => setForm({ ...form, max_concurrent: v })} min={1} max={50} step={1} />
-                </div>
-                <div className="space-y-2">
-                  <Label>ניסיונות חוזרים: {form.max_retries}</Label>
-                  <Slider value={[form.max_retries]} onValueChange={([v]) => setForm({ ...form, max_retries: v })} min={1} max={3} step={1} />
-                </div>
-              </div>
-            )}
+
 
             <DialogFooter className="gap-2">
               {step > 1 && <Button variant="outline" onClick={() => setStep(step - 1)}>הקודם</Button>}
-              {step < 3 ? (
-                <Button onClick={() => setStep(step + 1)} disabled={step === 1 && !form.name}>הבא</Button>
+              {step < 2 ? (
+                <Button onClick={() => setStep(step + 1)} disabled={!form.name || !form.script_id || !form.start_date}>הבא</Button>
               ) : (
                 <Button onClick={() => createCampaign.mutate()} disabled={createCampaign.isPending}>
-                  {createCampaign.isPending ? 'יוצר...' : '🚀 הפעל קמפיין'}
+                  {createCampaign.isPending ? 'יוצר...' : '🚀 צור קמפיין'}
                 </Button>
               )}
             </DialogFooter>

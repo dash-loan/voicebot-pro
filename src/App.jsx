@@ -32,6 +32,7 @@ import AllCampaigns from './pages/admin/AllCampaigns';
 import SystemSettings from './pages/admin/SystemSettings';
 import RelevantContacts from './pages/RelevantContacts';
 import QualityLeads from './pages/QualityLeads';
+import Calendar from './pages/Calendar';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -71,6 +72,7 @@ const AuthenticatedApp = () => {
           <Route path="/campaigns/:campaignId" element={<CampaignDetail />} />
           <Route path="/results" element={<RelevantContacts />} />
           <Route path="/quality-leads" element={<QualityLeads />} />
+          <Route path="/calendar" element={<Calendar />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route element={<AdminRoute />}>
             <Route path="/admin" element={<AdminDashboard />} />

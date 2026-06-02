@@ -6,6 +6,10 @@
       "type": "string",
       "title": "\u05de\u05e1\u05e4\u05e8 \u05d8\u05dc\u05e4\u05d5\u05df"
     },
+    "vapi_phone_number_id": {
+      "type": "string",
+      "title": "Vapi Phone Number ID"
+    },
     "provider": {
       "type": "string",
       "title": "\u05e1\u05e4\u05e7",
@@ -19,6 +23,10 @@
       ],
       "default": "active",
       "title": "\u05e1\u05d8\u05d8\u05d5\u05e1"
+    },
+    "assigned_client_id": {
+      "type": "string",
+      "title": "\u05dc\u05e7\u05d5\u05d7 \u05de\u05e9\u05d5\u05d9\u05da"
     },
     "assigned_campaign_id": {
       "type": "string",

@@ -2,14 +2,15 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useState } from 'react';
-import { LayoutDashboard, Users, FileText, Phone, Megaphone, BarChart3, LogOut, Menu, Bot, Activity, TrendingUp, Settings, Flame, PhoneCall } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Phone, Megaphone, BarChart3, LogOut, Menu, Activity, TrendingUp, Settings, Flame, PhoneCall, CalendarDays, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BlockedUserScreen from '@/components/BlockedUserScreen';
 
 const adminLinks = [
   { to: '/admin', icon: LayoutDashboard, label: 'דשבורד' },
   { to: '/admin/clients', icon: Users, label: 'ניהול לקוחות' },
-  { to: '/admin/campaigns', icon: Megaphone, label: 'כל הקמפיינים' },
+  { to: '/campaigns', icon: Megaphone, label: 'קמפיינים' },
+  { to: '/calendar', icon: CalendarDays, label: 'לוח תכנון' },
   { to: '/admin/scripts', icon: FileText, label: 'תסריטים' },
   { to: '/admin/numbers', icon: Phone, label: 'מספרים' },
   { to: '/admin/profitability', icon: TrendingUp, label: 'רווחיות' },
@@ -21,6 +22,7 @@ const adminLinks = [
 const clientLinks = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'דשבורד' },
   { to: '/campaigns', icon: Megaphone, label: 'קמפיינים' },
+  { to: '/calendar', icon: CalendarDays, label: 'לוח תכנון' },
   { to: '/quality-leads', icon: Flame, label: 'לידים איכותיים 🔥' },
   { to: '/results', icon: PhoneCall, label: 'כל השיחות' },
   { to: '/analytics', icon: BarChart3, label: 'אנליטיקה' },
