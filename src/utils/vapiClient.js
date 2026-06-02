@@ -83,8 +83,7 @@ export async function vapiCheckConnection({ apiKey, assistantId }) {
  * Create a new Vapi Assistant from a script.
  * Uses private apiKey — admin only.
  */
-export async function vapiCreateAssistant({ apiKey, name, systemPrompt, firstMessage, language }) {
-  const deepgramLang = language === 'ar' ? 'ar' : 'he';
+export async function vapiCreateAssistant({ apiKey, name, systemPrompt, firstMessage }) {
   return vapiRequest({
     key: apiKey,
     method: 'POST',
@@ -92,18 +91,18 @@ export async function vapiCreateAssistant({ apiKey, name, systemPrompt, firstMes
     body: {
       name,
       model: {
-        provider: 'anthropic',
-        model: 'claude-sonnet-4-5-20250929',
+        provider: 'anthropic-bedrock',
+        model: 'claude-sonnet-4-6',
         messages: [{ role: 'system', content: systemPrompt }],
       },
       voice: {
-        provider: 'azure',
-        voiceId: language === 'ar' ? 'ar-IL-AvriNeural' : 'he-IL-AvriNeural',
+        provider: 'vapi',
+        voiceId: 'Elliot',
       },
       transcriber: {
         provider: 'deepgram',
         model: 'nova-3',
-        language: deepgramLang,
+        language: 'he',
       },
       firstMessage: firstMessage || '',
     },
@@ -114,8 +113,7 @@ export async function vapiCreateAssistant({ apiKey, name, systemPrompt, firstMes
  * Update an existing Vapi Assistant.
  * Uses private apiKey — admin only.
  */
-export async function vapiUpdateAssistant({ apiKey, assistantId, name, systemPrompt, firstMessage, language }) {
-  const deepgramLang = language === 'ar' ? 'ar' : 'he';
+export async function vapiUpdateAssistant({ apiKey, assistantId, name, systemPrompt, firstMessage }) {
   return vapiRequest({
     key: apiKey,
     method: 'PATCH',
@@ -123,18 +121,18 @@ export async function vapiUpdateAssistant({ apiKey, assistantId, name, systemPro
     body: {
       name,
       model: {
-        provider: 'anthropic',
-        model: 'claude-sonnet-4-5-20250929',
+        provider: 'anthropic-bedrock',
+        model: 'claude-sonnet-4-6',
         messages: [{ role: 'system', content: systemPrompt }],
       },
       voice: {
-        provider: 'azure',
-        voiceId: language === 'ar' ? 'ar-IL-AvriNeural' : 'he-IL-AvriNeural',
+        provider: 'vapi',
+        voiceId: 'Elliot',
       },
       transcriber: {
         provider: 'deepgram',
         model: 'nova-3',
-        language: deepgramLang,
+        language: 'he',
       },
       firstMessage: firstMessage || '',
     },
