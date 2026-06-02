@@ -97,8 +97,8 @@ export async function vapiCreateAssistant({ apiKey, name, systemPrompt, firstMes
         messages: [{ role: 'system', content: systemPrompt }],
       },
       voice: {
-        provider: '11labs',
-        voiceId: language === 'ar' ? 'Arabic_Voice' : 'Elliot',
+        provider: 'azure',
+        voiceId: language === 'ar' ? 'ar-IL-AvriNeural' : 'he-IL-AvriNeural',
       },
       transcriber: {
         provider: 'deepgram',
@@ -128,8 +128,8 @@ export async function vapiUpdateAssistant({ apiKey, assistantId, name, systemPro
         messages: [{ role: 'system', content: systemPrompt }],
       },
       voice: {
-        provider: '11labs',
-        voiceId: language === 'ar' ? 'Arabic_Voice' : 'Elliot',
+        provider: 'azure',
+        voiceId: language === 'ar' ? 'ar-IL-AvriNeural' : 'he-IL-AvriNeural',
       },
       transcriber: {
         provider: 'deepgram',
