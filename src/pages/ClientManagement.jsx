@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Plus, Lock, Unlock, Package, Search } from 'lucide-react';
 import ClientPackagesDialog from '@/components/ClientPackagesDialog';
+import { sendWelcomeEmail } from '@/functions/sendWelcomeEmail';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -46,12 +47,18 @@ export default function ClientManagement() {
   const inviteClient = useMutation({
     mutationFn: async (email) => {
       await base44.users.inviteUser(email, 'user');
+      // שליחת מייל ברכה מעוצב נוסף
+      try {
+        await sendWelcomeEmail({ email, appUrl: window.location.origin });
+      } catch (_) {
+        // לא לחסום אם המייל הנוסף נכשל
+      }
     },
     onSuccess: () => {
       setInviteOpen(false);
       setInviteEmail('');
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      toast({ title: 'ההזמנה נשלחה בהצלחה' });
+      toast({ title: '✅ ההזמנה נשלחה בהצלחה', description: 'נשלח מייל ברכה מעוצב ללקוח' });
     },
     onError: (err) => {
       toast({ title: 'שגיאה', description: err.message, variant: 'destructive' });
