@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Megaphone, Play, Pause, Eye, Upload, Trash2, Flame } from 'lucide-react';
+import { Plus, Megaphone, Play, Pause, Eye, Upload, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -58,12 +58,6 @@ export default function Campaigns() {
   const { data: virtualNumbers = [] } = useQuery({
     queryKey: ['virtualNumbers'],
     queryFn: () => base44.entities.VirtualNumber.filter({ status: 'active' }),
-  });
-
-  const { data: callLogs = [] } = useQuery({
-    queryKey: ['myCallLogs', user?.id],
-    queryFn: () => base44.entities.CallLog.filter({ client_id: user?.id }),
-    enabled: !!user?.id,
   });
 
   const createCampaign = useMutation({
@@ -157,7 +151,6 @@ export default function Campaigns() {
   };
 
   const activeCount = campaigns.filter(c => c.status === 'active').length;
-  const getCampaignHotLeads = (cid) => callLogs.filter(l => l.campaign_id === cid && l.lead_quality === 'hot_lead').length;
 
   return (
     <div className="space-y-6">
@@ -283,14 +276,13 @@ export default function Campaigns() {
                   <TableHead>שם</TableHead>
                   <TableHead>סטטוס</TableHead>
                   <TableHead>התקדמות</TableHead>
-                  <TableHead>לידים חמים</TableHead>
+                  <TableHead>ענו</TableHead>
                   <TableHead>פעולות</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {campaigns.map(campaign => {
                   const progress = campaign.total_contacts > 0 ? Math.round((campaign.dialed_contacts / campaign.total_contacts) * 100) : 0;
-                  const hotLeads = getCampaignHotLeads(campaign.id);
                   return (
                   <TableRow key={campaign.id}>
                     <TableCell>
@@ -310,11 +302,8 @@ export default function Campaigns() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {hotLeads > 0 ? (
-                        <span className="flex items-center gap-1 text-orange-600 font-semibold">
-                          <Flame className="w-4 h-4" /> {hotLeads}
-                        </span>
-                      ) : <span className="text-muted-foreground text-sm">—</span>}
+                      <span className="text-sm font-medium">{campaign.answered_contacts || 0}</span>
+                      <span className="text-xs text-muted-foreground"> / {campaign.total_contacts || 0}</span>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
