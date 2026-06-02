@@ -93,7 +93,7 @@ export async function vapiCreateAssistant({ apiKey, name, systemPrompt, firstMes
       name,
       model: {
         provider: 'anthropic',
-        model: 'claude-sonnet-4-5',
+        model: 'claude-sonnet-4-5-20250929',
         messages: [{ role: 'system', content: systemPrompt }],
       },
       voice: {
@@ -124,7 +124,7 @@ export async function vapiUpdateAssistant({ apiKey, assistantId, name, systemPro
       name,
       model: {
         provider: 'anthropic',
-        model: 'claude-sonnet-4-5',
+        model: 'claude-sonnet-4-5-20250929',
         messages: [{ role: 'system', content: systemPrompt }],
       },
       voice: {
