@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { vapiCreateAssistant, vapiUpdateAssistant } from '@/utils/vapiClient';
-import { Save, ArrowRight, Bot, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Save, ArrowRight, Bot, CheckCircle2, AlertCircle, PhoneCall, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 
 const INITIAL_FORM = { name: '', description: '', language: 'he', system_prompt: '', first_message: '', status: 'draft', assigned_client_id: '', vapi_assistant_id: '' };
@@ -23,6 +24,10 @@ export default function ScriptBuilder() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState(INITIAL_FORM);
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [testPhone, setTestPhone] = useState('');
+  const [testCalling, setTestCalling] = useState(false);
+  const [testResult, setTestResult] = useState(null);
 
   const { data: existingScript } = useQuery({
     queryKey: ['script', scriptId],
@@ -115,6 +120,36 @@ export default function ScriptBuilder() {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const handleTestCall = async () => {
+    if (!testPhone.trim()) return;
+    setTestCalling(true);
+    setTestResult(null);
+    try {
+      const phoneNumberId = vapiConfigs[0]?.vapi_phone_number_id;
+      const resp = await fetch('https://api.vapi.ai/call', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          assistantId: form.vapi_assistant_id,
+          phoneNumberId,
+          customer: { number: testPhone.trim(), name: 'בדיקת תסריט' },
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        setTestResult({ error: data.message || `שגיאה ${resp.status}` });
+      } else {
+        setTestResult({ success: true, callId: data.id });
+      }
+    } catch (e) {
+      setTestResult({ error: e.message });
+    }
+    setTestCalling(false);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -139,6 +174,11 @@ export default function ScriptBuilder() {
             <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
               <AlertCircle className="w-4 h-4" /> Vapi API Key חסר
             </div>
+          )}
+          {form.vapi_assistant_id && apiKey && (
+            <Button variant="outline" onClick={() => { setTestResult(null); setTestDialogOpen(true); }} className="gap-2">
+              <PhoneCall className="w-4 h-4" /> בדוק תסריט
+            </Button>
           )}
           <Button onClick={() => saveScript.mutate()} disabled={saveScript.isPending} className="gap-2 min-w-[100px]">
             <Save className="w-4 h-4" />
@@ -249,6 +289,51 @@ export default function ScriptBuilder() {
           </CardContent>
         </Card>
       </div>
+      {/* Test call dialog */}
+      <Dialog open={testDialogOpen} onOpenChange={open => { setTestDialogOpen(open); if (!open) { setTestPhone(''); setTestResult(null); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PhoneCall className="w-5 h-5 text-primary" /> בדיקת תסריט – {form.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <p className="text-sm text-muted-foreground">הסוכן יחייג למספר שתזין ויתנהל לפי הגדרות התסריט הנוכחי.</p>
+            <div className="space-y-2">
+              <Label>מספר טלפון לבדיקה *</Label>
+              <Input
+                value={testPhone}
+                onChange={e => { setTestPhone(e.target.value); setTestResult(null); }}
+                placeholder="+972501234567"
+                dir="ltr"
+                className="font-mono"
+              />
+            </div>
+            {testResult?.success && (
+              <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                <span>השיחה יצאה! Call ID: <span className="font-mono text-xs">{testResult.callId}</span></span>
+              </div>
+            )}
+            {testResult?.error && (
+              <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {testResult.error}
+              </div>
+            )}
+            <div className="p-3 bg-muted/50 rounded-lg text-xs text-muted-foreground space-y-0.5">
+              <p>• Assistant ID: <span className="font-mono">{form.vapi_assistant_id?.slice(0, 20)}...</span></p>
+              <p>• Phone Number ID: <span className="font-mono">{vapiConfigs[0]?.vapi_phone_number_id?.slice(0, 20) || 'לא מוגדר'}...</span></p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTestDialogOpen(false)}>סגור</Button>
+            <Button onClick={handleTestCall} disabled={testCalling || !testPhone.trim()} className="gap-2">
+              {testCalling ? <><Loader2 className="w-4 h-4 animate-spin" /> מחייג...</> : <><PhoneCall className="w-4 h-4" /> חייג עכשיו</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
