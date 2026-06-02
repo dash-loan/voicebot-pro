@@ -100,6 +100,14 @@ export default function CampaignDetail() {
   const vapiPublicKey = vapiConfigs[0]?.vapi_public_key;
   const vapiPhoneNumberId = vapiConfigs[0]?.vapi_phone_number_id;
 
+  const { data: clientMinutesList = [] } = useQuery({
+    queryKey: ['clientMinutes', campaign?.client_id],
+    queryFn: () => base44.entities.ClientMinutes.filter({ client_id: campaign.client_id }),
+    enabled: !!campaign?.client_id,
+  });
+  const clientMinutes = clientMinutesList[0];
+  const minutesExhausted = clientMinutes && (clientMinutes.remaining_minutes || 0) <= 0;
+
   const updateStatus = useMutation({
     mutationFn: async (status) => {
       await base44.entities.Campaign.update(campaignId, { status });
@@ -295,6 +303,11 @@ export default function CampaignDetail() {
         <div className="flex gap-2">
           {campaign.status !== 'completed' && (
             <>
+              {minutesExhausted && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive font-medium">
+                  🔒 הדקות נוצלו במלואן — לרכישת דקות נוספות צור קשר עם מנהל התיק
+                </div>
+              )}
               {invalidPhones.length > 0 && campaign.status !== 'active' && (
                 <div className="text-xs text-destructive bg-destructive/10 px-3 py-1 rounded">
                   ⚠️ {invalidPhones.length} מספרים לא תקינים
@@ -308,7 +321,7 @@ export default function CampaignDetail() {
                 </>
               ) : (
                 <>
-                  <Button onClick={handleStart} disabled={launching || invalidPhones.length > 0 || pending === 0}>
+                  <Button onClick={handleStart} disabled={launching || invalidPhones.length > 0 || pending === 0 || minutesExhausted}>
                     <Play className="w-4 h-4 ml-2" />
                     {dialProgress ? `מחייג ${dialProgress.current}/${dialProgress.total}...` : `הפעל קמפיין (${pending} ממתינים)`}
                   </Button>

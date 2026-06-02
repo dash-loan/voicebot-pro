@@ -17,7 +17,21 @@ Deno.serve(async (req) => {
     const configs = await base44.asServiceRole.entities.VapiConfig.list();
     const config = configs[0];
     if (!config?.vapi_api_key) return Response.json({ error: 'Vapi API Key לא מוגדר' }, { status: 400 });
-    if (!config?.vapi_phone_number_id) return Response.json({ error: 'Phone Number ID לא מוגדר' }, { status: 400 });
+
+    // Use campaign's assigned virtual number's vapi_phone_number_id
+    let phoneNumberId = config.vapi_phone_number_id;
+    if (campaign.virtual_number_id) {
+      const vn = await base44.asServiceRole.entities.VirtualNumber.get(campaign.virtual_number_id);
+      if (vn?.vapi_phone_number_id) phoneNumberId = vn.vapi_phone_number_id;
+    }
+    if (!phoneNumberId) return Response.json({ error: 'Phone Number ID לא מוגדר — שייך מספר וירטואלי לקמפיין' }, { status: 400 });
+
+    // Check client minutes
+    const minutesList2 = await base44.asServiceRole.entities.ClientMinutes.filter({ client_id: campaign.client_id });
+    const cm = minutesList2[0];
+    if (!cm || (cm.remaining_minutes || 0) <= 0) {
+      return Response.json({ error: 'אין דקות זמינות — יש לצור קשר עם מנהל התיק לרכישת דקות נוספות', frozen: true }, { status: 402 });
+    }
 
     // Determine assistant ID (use campaign override or default Hebrew)
     const assistantId = campaign.vapi_assistant_id || config.vapi_assistant_id;
