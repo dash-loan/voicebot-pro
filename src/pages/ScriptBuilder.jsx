@@ -15,7 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 
-const INITIAL_FORM = { name: '', description: '', language: 'he', system_prompt: '', first_message: '', status: 'draft', assigned_client_id: '', vapi_assistant_id: '' };
+const INITIAL_FORM = { name: '', description: '', language: 'he', system_prompt: '', first_message: '', status: 'draft', assigned_client_id: '', vapi_assistant_id: '', max_call_duration: 180 };
 
 export default function ScriptBuilder() {
   const { scriptId } = useParams();
@@ -74,25 +74,27 @@ export default function ScriptBuilder() {
 
       // If system_prompt filled → sync to Vapi. If assistant already linked but no prompt, just save link.
       if (form.system_prompt.trim()) {
-        if (vapiAssistantId) {
-          await vapiUpdateAssistant({
-            apiKey,
-            assistantId: vapiAssistantId,
-            name: form.name,
-            systemPrompt: form.system_prompt,
-            firstMessage: form.first_message,
-            language: form.language,
-          });
-        } else {
-          const vapiResult = await vapiCreateAssistant({
-            apiKey,
-            name: form.name,
-            systemPrompt: form.system_prompt,
-            firstMessage: form.first_message,
-            language: form.language,
-          });
-          vapiAssistantId = vapiResult.id;
-        }
+      if (vapiAssistantId) {
+        await vapiUpdateAssistant({
+          apiKey,
+          assistantId: vapiAssistantId,
+          name: form.name,
+          systemPrompt: form.system_prompt,
+          firstMessage: form.first_message,
+          language: form.language,
+          maxDurationSeconds: form.max_call_duration || 180,
+        });
+      } else {
+        const vapiResult = await vapiCreateAssistant({
+          apiKey,
+          name: form.name,
+          systemPrompt: form.system_prompt,
+          firstMessage: form.first_message,
+          language: form.language,
+          maxDurationSeconds: form.max_call_duration || 180,
+        });
+        vapiAssistantId = vapiResult.id;
+      }
       }
 
       const scriptData = {
@@ -259,6 +261,25 @@ export default function ScriptBuilder() {
                 <p className="text-xs text-green-600 font-mono">{form.vapi_assistant_id}</p>
               )}
               {!apiKey && <p className="text-xs text-muted-foreground">נדרש Vapi API Key בהגדרות המערכת</p>}
+            </div>
+
+            <div className="space-y-2 pt-2 border-t">
+              <Label>משך מקסימלי לשיחה</Label>
+              <Select
+                value={String(form.max_call_duration || 180)}
+                onValueChange={v => set('max_call_duration', Number(v))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="60">1 דקה</SelectItem>
+                  <SelectItem value="120">2 דקות</SelectItem>
+                  <SelectItem value="180">3 דקות (ברירת מחדל)</SelectItem>
+                  <SelectItem value="240">4 דקות</SelectItem>
+                  <SelectItem value="300">5 דקות</SelectItem>
+                  <SelectItem value="600">10 דקות</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Vapi ינתק אוטומטית את השיחה אחרי הזמן הזה</p>
             </div>
 
             <div className="flex items-center justify-between pt-2 border-t">

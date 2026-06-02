@@ -83,7 +83,7 @@ export async function vapiCheckConnection({ apiKey, assistantId }) {
  * Create a new Vapi Assistant from a script.
  * Uses private apiKey — admin only.
  */
-export async function vapiCreateAssistant({ apiKey, name, systemPrompt, firstMessage }) {
+export async function vapiCreateAssistant({ apiKey, name, systemPrompt, firstMessage, maxDurationSeconds = 180 }) {
   return vapiRequest({
     key: apiKey,
     method: 'POST',
@@ -105,6 +105,7 @@ export async function vapiCreateAssistant({ apiKey, name, systemPrompt, firstMes
         language: 'he',
       },
       firstMessage: firstMessage || '',
+      maxDurationSeconds,
     },
   });
 }
@@ -113,7 +114,7 @@ export async function vapiCreateAssistant({ apiKey, name, systemPrompt, firstMes
  * Update an existing Vapi Assistant.
  * Uses private apiKey — admin only.
  */
-export async function vapiUpdateAssistant({ apiKey, assistantId, name, systemPrompt, firstMessage }) {
+export async function vapiUpdateAssistant({ apiKey, assistantId, name, systemPrompt, firstMessage, maxDurationSeconds = 180 }) {
   return vapiRequest({
     key: apiKey,
     method: 'PATCH',
@@ -135,6 +136,7 @@ export async function vapiUpdateAssistant({ apiKey, assistantId, name, systemPro
         language: 'he',
       },
       firstMessage: firstMessage || '',
+      maxDurationSeconds,
     },
   });
 }
