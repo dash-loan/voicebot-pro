@@ -93,6 +93,13 @@ export default function CampaignDetail() {
     enabled: !!campaign?.script_id
   });
 
+  const { data: vapiConfigs = [] } = useQuery({
+    queryKey: ['vapiConfigs'],
+    queryFn: () => base44.entities.VapiConfig.list(),
+  });
+  const vapiPublicKey = vapiConfigs[0]?.vapi_public_key;
+  const vapiPhoneNumberId = vapiConfigs[0]?.vapi_phone_number_id;
+
   const updateStatus = useMutation({
     mutationFn: async (status) => {
       await base44.entities.Campaign.update(campaignId, { status });
@@ -116,7 +123,14 @@ export default function CampaignDetail() {
       const batch = pendingList.slice(i, i + maxConcurrent);
       await Promise.all(batch.map(async (contact) => {
         try {
-          const data = await vapiCall({ phone: contact.phone, name: contact.name });
+          const assistantId = campaign.vapi_assistant_id || vapiConfigs[0]?.vapi_assistant_id;
+          const data = await vapiCall({
+            publicKey: vapiPublicKey,
+            phone: contact.phone,
+            name: contact.name,
+            assistantId,
+            phoneNumberId: vapiPhoneNumberId,
+          });
           await base44.entities.Contact.update(contact.id, {
             status: 'calling',
             attempts: (contact.attempts || 0) + 1,
@@ -143,7 +157,7 @@ export default function CampaignDetail() {
     setStopping(true);
     const callingList = contacts.filter(c => c.status === 'calling' && c.notes && !c.notes.startsWith('error'));
     await Promise.all(callingList.map(async (c) => {
-      await vapiEndCall(c.notes).catch(() => {});
+    await vapiEndCall({ publicKey: vapiPublicKey, callId: c.notes }).catch(() => {});
       await base44.entities.Contact.update(c.id, { status: 'pending' });
     }));
     await base44.entities.Campaign.update(campaignId, { status: 'paused' });

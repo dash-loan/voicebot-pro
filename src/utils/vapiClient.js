@@ -1,17 +1,21 @@
 /**
  * Vapi API Client
  * All Vapi API calls are centralized here.
- * apiKey must be passed from the caller (loaded from VapiConfig entity).
- * This makes migration to a private server straightforward.
+ *
+ * Key rule:
+ *   Frontend (/call, /call DELETE) → publicKey (vapi_public_key from VapiConfig)
+ *   Admin/Backend (create/update assistant) → apiKey (vapi_api_key, private)
+ *
+ * Migration note: replace VAPI_BASE and swap fetch() for your server's proxy to move off Base44.
  */
 
 const VAPI_BASE = 'https://api.vapi.ai';
 
-async function vapiRequest({ apiKey, method, path, body }) {
+async function vapiRequest({ key, method, path, body }) {
   const response = await fetch(`${VAPI_BASE}${path}`, {
     method,
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
+      'Authorization': `Bearer ${key}`,
       'Content-Type': 'application/json',
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -23,10 +27,13 @@ async function vapiRequest({ apiKey, method, path, body }) {
   return data;
 }
 
-/** Create an outbound call */
-export async function vapiCall({ apiKey, phone, name, assistantId, phoneNumberId }) {
+/**
+ * Create an outbound call.
+ * Uses publicKey — safe for frontend/browser.
+ */
+export async function vapiCall({ publicKey, phone, name, assistantId, phoneNumberId }) {
   return vapiRequest({
-    apiKey,
+    key: publicKey,
     method: 'POST',
     path: '/call',
     body: {
@@ -37,24 +44,33 @@ export async function vapiCall({ apiKey, phone, name, assistantId, phoneNumberId
   });
 }
 
-/** End (delete) an active call */
-export async function vapiEndCall({ apiKey, callId }) {
+/**
+ * End (delete) an active call.
+ * Uses publicKey — safe for frontend/browser.
+ */
+export async function vapiEndCall({ publicKey, callId }) {
   const response = await fetch(`${VAPI_BASE}/call/${callId}`, {
     method: 'DELETE',
-    headers: { 'Authorization': `Bearer ${apiKey}` },
+    headers: { 'Authorization': `Bearer ${publicKey}` },
   });
   return response.ok;
 }
 
-/** Get call details */
+/**
+ * Get call details.
+ * Uses private apiKey — admin only.
+ */
 export async function vapiGetCall({ apiKey, callId }) {
-  return vapiRequest({ apiKey, method: 'GET', path: `/call/${callId}` });
+  return vapiRequest({ key: apiKey, method: 'GET', path: `/call/${callId}` });
 }
 
-/** Check connection validity */
+/**
+ * Check connection validity.
+ * Uses private apiKey — admin only.
+ */
 export async function vapiCheckConnection({ apiKey, assistantId }) {
   try {
-    const data = await vapiRequest({ apiKey, method: 'GET', path: `/assistant/${assistantId}` });
+    const data = await vapiRequest({ key: apiKey, method: 'GET', path: `/assistant/${assistantId}` });
     return { connected: true, name: data.name };
   } catch (e) {
     if (e.message.includes('401')) return { connected: false, error: 'API Key שגוי ❌' };
@@ -63,11 +79,14 @@ export async function vapiCheckConnection({ apiKey, assistantId }) {
   }
 }
 
-/** Create a new Vapi Assistant from a script */
+/**
+ * Create a new Vapi Assistant from a script.
+ * Uses private apiKey — admin only.
+ */
 export async function vapiCreateAssistant({ apiKey, name, systemPrompt, firstMessage, language }) {
   const deepgramLang = language === 'ar' ? 'ar' : 'he';
   return vapiRequest({
-    apiKey,
+    key: apiKey,
     method: 'POST',
     path: '/assistant',
     body: {
@@ -91,11 +110,14 @@ export async function vapiCreateAssistant({ apiKey, name, systemPrompt, firstMes
   });
 }
 
-/** Update an existing Vapi Assistant */
+/**
+ * Update an existing Vapi Assistant.
+ * Uses private apiKey — admin only.
+ */
 export async function vapiUpdateAssistant({ apiKey, assistantId, name, systemPrompt, firstMessage, language }) {
   const deepgramLang = language === 'ar' ? 'ar' : 'he';
   return vapiRequest({
-    apiKey,
+    key: apiKey,
     method: 'PATCH',
     path: `/assistant/${assistantId}`,
     body: {
@@ -119,7 +141,10 @@ export async function vapiUpdateAssistant({ apiKey, assistantId, name, systemPro
   });
 }
 
-/** Delete a Vapi Assistant */
+/**
+ * Delete a Vapi Assistant.
+ * Uses private apiKey — admin only.
+ */
 export async function vapiDeleteAssistant({ apiKey, assistantId }) {
   const response = await fetch(`${VAPI_BASE}/assistant/${assistantId}`, {
     method: 'DELETE',

@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
 import { vapiCall } from '@/utils/vapiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,6 +15,14 @@ export default function QuickDial() {
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState([]);
 
+  const { data: vapiConfigs = [] } = useQuery({
+    queryKey: ['vapiConfigs'],
+    queryFn: () => base44.entities.VapiConfig.list(),
+  });
+  const vapiPublicKey = vapiConfigs[0]?.vapi_public_key;
+  const vapiAssistantId = vapiConfigs[0]?.vapi_assistant_id;
+  const vapiPhoneNumberId = vapiConfigs[0]?.vapi_phone_number_id;
+
   const addLog = (entry) => setLogs(prev => [entry, ...prev]);
 
   const handleDial = async () => {
@@ -25,7 +35,8 @@ export default function QuickDial() {
     addLog({ type: 'info', message: `מחייג ל-${phone} (${name || 'ללא שם'})...`, time: new Date().toLocaleTimeString('he-IL') });
 
     try {
-      const data = await vapiCall({ phone, name });
+      if (!vapiPublicKey) throw new Error('Vapi Public Key לא הוגדר בהגדרות המערכת');
+      const data = await vapiCall({ publicKey: vapiPublicKey, phone, name, assistantId: vapiAssistantId, phoneNumberId: vapiPhoneNumberId });
       addLog({
         type: 'success',
         message: `✅ שיחה הוחלה! Call ID: ${data.id}`,
