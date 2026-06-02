@@ -131,13 +131,22 @@ export default function Profitability() {
     });
   }, [callLogs, clientMinutes, filteredUsers]);
 
-  // Month options (last 18 months)
-  const monthOptions = Array.from({ length: 18 }, (_, i) => {
-    const d = subMonths(now, i);
-    return { value: format(d, 'yyyy-MM'), label: `${MONTHS_HE[getMonth(d)]} ${getYear(d)}` };
-  });
+  // Month options: Jan 2026 → Dec 2050
+  const monthOptions = useMemo(() => {
+    const options = [];
+    for (let year = 2026; year <= 2050; year++) {
+      for (let month = 0; month < 12; month++) {
+        const value = `${year}-${String(month + 1).padStart(2, '0')}`;
+        options.push({ value, label: `${MONTHS_HE[month]} ${year}` });
+      }
+    }
+    return options;
+  }, []);
 
-  const compareOptions = [{ value: 'none', label: 'ללא השוואה' }, ...monthOptions.filter(m => m.value !== selectedMonth)];
+  const compareOptions = useMemo(() => [
+    { value: 'none', label: 'ללא השוואה' },
+    ...monthOptions.filter(m => m.value !== selectedMonth)
+  ], [monthOptions, selectedMonth]);
 
   const clientChartData = mainStats.filter(c => c.revenue > 0 || c.cost > 0).map(c => ({
     name: c.name.split(' ')[0],
