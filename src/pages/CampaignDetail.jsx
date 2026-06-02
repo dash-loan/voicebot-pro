@@ -25,6 +25,7 @@ export default function CampaignDetail() {
   const [uploadPreview, setUploadPreview] = useState(null);
   const [pendingContacts, setPendingContacts] = useState([]);
   const [importing, setImporting] = useState(false);
+  const [contactFilter, setContactFilter] = useState('all');
 
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
@@ -286,6 +287,8 @@ export default function CampaignDetail() {
   const pending = contacts.filter(c => c.status === 'pending').length;
   const invalidPhones = contacts.filter(c => c.status === 'pending' && !validateIsraeliMobile(c.phone).valid);
   const statusLabels = { pending: 'ממתין', calling: 'בשיחה', answered: 'ענה', voicemail: 'תא קולי', no_answer: 'לא ענה', interested: 'מעוניין', not_interested: 'לא מעוניין' };
+  const statusCounts = contacts.reduce((acc, c) => { acc[c.status] = (acc[c.status] || 0) + 1; return acc; }, {});
+  const filteredContacts = contactFilter === 'all' ? contacts : contacts.filter(c => c.status === contactFilter);
 
   return (
     <div className="space-y-6">
@@ -361,15 +364,27 @@ export default function CampaignDetail() {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>אנשי קשר ({contacts.length})</CardTitle>
-          <div className="flex items-center gap-2">
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <CardTitle>אנשי קשר ({contacts.length})</CardTitle>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {[['all','הכל'], ['pending','ממתין'], ['calling','בשיחה'], ['interested','מעוניין'], ['not_interested','לא מעוניין'], ['answered','ענה'], ['no_answer','לא ענה'], ['voicemail','תא קולי']].map(([val, lbl]) => (
+                <button key={val} onClick={() => setContactFilter(val)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${contactFilter === val ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border hover:bg-muted'}`}>
+                  {lbl}{val !== 'all' && statusCounts[val] ? ` (${statusCounts[val]})` : val === 'all' ? ` (${contacts.length})` : ''}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
             <label htmlFor="upload-contacts" className="cursor-pointer">
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-input bg-background text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors">
                 <Upload className="w-4 h-4" /> העלה רשומות חדשות
               </div>
               <input id="upload-contacts" type="file" accept=".csv,.txt" className="hidden" onChange={handleFileUpload} />
             </label>
+          </div>
           </div>
         </CardHeader>
         {uploadPreview && (
@@ -402,7 +417,7 @@ export default function CampaignDetail() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {contacts.slice(0, 20).map(contact => (
+                {filteredContacts.slice(0, 50).map(contact => (
                   <TableRow key={contact.id}>
                     <TableCell className="font-medium">{contact.name}</TableCell>
                     <TableCell className="font-mono" dir="ltr">{formatIsraeliPhone(contact.phone)}</TableCell>
@@ -418,7 +433,7 @@ export default function CampaignDetail() {
               </TableBody>
             </Table>
           )}
-          {contacts.length > 20 && <p className="text-center text-sm text-muted-foreground mt-4">מציג 20 מתוך {contacts.length}</p>}
+          {filteredContacts.length > 50 && <p className="text-center text-sm text-muted-foreground mt-4">מציג 50 מתוך {filteredContacts.length}</p>}
         </CardContent>
       </Card>
     </div>
