@@ -15,6 +15,7 @@ const adminLinks = [
   { to: '/admin/numbers', icon: Phone, label: 'מספרים' },
   { to: '/admin/profitability', icon: TrendingUp, label: 'רווחיות' },
   { to: '/admin/vapi-events', icon: Activity, label: 'לוג מערכת' },
+  { to: '/results', icon: BarChart3, label: 'כל השיחות' },
   { to: '/admin/quick-dial', icon: PhoneCall, label: 'Quick Dial' },
   { to: '/admin/settings', icon: Settings, label: 'הגדרות' },
 ];
