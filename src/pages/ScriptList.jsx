@@ -1,18 +1,23 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, FileText, Bot, CheckCircle2, AlertCircle, Rocket } from 'lucide-react';
+import { Plus, Edit, Trash2, FileText, Bot, CheckCircle2, AlertCircle, Rocket, Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/components/ui/use-toast';
+import { vapiListAssistants } from '@/utils/vapiClient';
 
 export default function ScriptList() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [importOpen, setImportOpen] = useState(false);
+  const [importing, setImporting] = useState(null);
 
   const { data: scripts = [], isLoading } = useQuery({
     queryKey: ['scripts'],
@@ -23,6 +28,40 @@ export default function ScriptList() {
     queryKey: ['users'],
     queryFn: () => base44.entities.User.filter({ role: 'user' }),
   });
+
+  const { data: vapiConfigs = [] } = useQuery({
+    queryKey: ['vapiConfigs'],
+    queryFn: () => base44.entities.VapiConfig.list(),
+  });
+  const apiKey = vapiConfigs[0]?.vapi_api_key;
+
+  const { data: vapiAssistants = [], isLoading: loadingAssistants } = useQuery({
+    queryKey: ['vapiAssistants', apiKey],
+    queryFn: () => vapiListAssistants({ apiKey }),
+    enabled: !!apiKey && importOpen,
+  });
+
+  // Assistants from Vapi that are not yet in our DB
+  const importedIds = new Set(scripts.map(s => s.vapi_assistant_id).filter(Boolean));
+  const unimported = vapiAssistants.filter(a => !importedIds.has(a.id));
+
+  const handleImport = async (assistant) => {
+    setImporting(assistant.id);
+    const systemPrompt = assistant.model?.messages?.find(m => m.role === 'system')?.content || '';
+    const firstMessage = assistant.firstMessage || '';
+    const scriptData = {
+      name: assistant.name,
+      system_prompt: systemPrompt,
+      first_message: firstMessage,
+      language: assistant.transcriber?.language === 'ar' ? 'ar' : 'he',
+      vapi_assistant_id: assistant.id,
+      status: 'draft',
+    };
+    await base44.entities.Script.create(scriptData);
+    queryClient.invalidateQueries({ queryKey: ['scripts'] });
+    toast({ title: `✅ "${assistant.name}" יובא בהצלחה` });
+    setImporting(null);
+  };
 
   const deleteScript = useMutation({
     mutationFn: (id) => base44.entities.Script.delete(id),
@@ -46,9 +85,16 @@ export default function ScriptList() {
           <h1 className="text-3xl font-bold">תסריטי שיחה</h1>
           <p className="text-muted-foreground mt-1">{scripts.length} תסריטים · כל תסריט = Vapi Assistant</p>
         </div>
-        <Button className="gap-2" onClick={() => navigate('/admin/scripts/new')}>
-          <Plus className="w-4 h-4" /> צור תסריט חדש
-        </Button>
+        <div className="flex gap-2">
+          {apiKey && (
+            <Button variant="outline" className="gap-2" onClick={() => setImportOpen(true)}>
+              <Download className="w-4 h-4" /> ייבא מ-Vapi
+            </Button>
+          )}
+          <Button className="gap-2" onClick={() => navigate('/admin/scripts/new')}>
+            <Plus className="w-4 h-4" /> צור תסריט חדש
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -144,6 +190,42 @@ export default function ScriptList() {
           )}
         </CardContent>
       </Card>
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Download className="w-5 h-5 text-primary" /> ייבוא Assistants מ-Vapi
+            </DialogTitle>
+          </DialogHeader>
+          {loadingAssistants ? (
+            <div className="py-8 text-center"><div className="w-6 h-6 border-2 border-primary/20 border-t-primary rounded-full animate-spin mx-auto" /></div>
+          ) : unimported.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">
+              {vapiAssistants.length === 0 ? 'לא נמצאו Assistants ב-Vapi' : 'כל ה-Assistants כבר מיובאים ✓'}
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {unimported.map(a => (
+                <div key={a.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/30">
+                  <div>
+                    <p className="font-medium">{a.name}</p>
+                    <p className="text-xs text-muted-foreground font-mono">{a.id.slice(0, 20)}...</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => handleImport(a)}
+                    disabled={importing === a.id}
+                    className="gap-1"
+                  >
+                    {importing === a.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                    ייבא
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
