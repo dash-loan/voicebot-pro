@@ -7,9 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Activity, RefreshCw } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Activity, RefreshCw, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 import { he } from 'date-fns/locale';
+import TranscriptViewer from '@/components/TranscriptViewer';
 
 const EVENT_CONFIG = {
   'call.started': { label: 'שיחה התחילה', variant: 'default' },
@@ -20,12 +22,22 @@ const EVENT_CONFIG = {
 export default function VapiEvents() {
   const [eventFilter, setEventFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
+  const [viewing, setViewing] = useState(null);
 
   const { data: events = [], isLoading, refetch, isFetching } = useQuery({
     queryKey: ['vapiWebhookEvents'],
     queryFn: () => base44.entities.VapiWebhookEvents.list('-created_date', 200),
     refetchInterval: 30000,
   });
+
+  const { data: callLogs = [] } = useQuery({
+    queryKey: ['callLogsAdmin'],
+    queryFn: () => base44.entities.CallLog.list('-created_date', 500),
+    refetchInterval: 30000,
+  });
+
+  // Build a map: vapiCallId → callLog for transcript lookup
+  const callLogMap = Object.fromEntries(callLogs.map(l => [l.vapi_call_id, l]));
 
   const filtered = events.filter(e => {
     if (eventFilter !== 'all' && e.event !== eventFilter) return false;
@@ -34,7 +46,7 @@ export default function VapiEvents() {
   });
 
   const started = events.filter(e => e.event === 'call.started').length;
-  const ended = events.filter(e => e.event === 'call.ended').length;
+  const ended = callLogs.length;
   const failed = events.filter(e => e.event === 'call.failed').length;
 
   return (
@@ -59,8 +71,8 @@ export default function VapiEvents() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'שיחות שהתחילו', count: started, cls: 'bg-blue-50 border-blue-200 text-blue-700' },
-          { label: 'שיחות שהסתיימו', count: ended, cls: 'bg-green-50 border-green-200 text-green-700' },
+          { label: 'שיחות שהוצאו', count: started, cls: 'bg-blue-50 border-blue-200 text-blue-700' },
+          { label: 'שיחות עם תמלול', count: ended, cls: 'bg-green-50 border-green-200 text-green-700' },
           { label: 'שיחות שנכשלו', count: failed, cls: 'bg-red-50 border-red-200 text-red-700' },
         ].map(s => (
           <div key={s.label} className={`border rounded-xl p-4 ${s.cls}`}>
@@ -104,6 +116,7 @@ export default function VapiEvents() {
                   <TableHead>Vapi Call ID</TableHead>
                   <TableHead>טלפון</TableHead>
                   <TableHead>משך</TableHead>
+                  <TableHead>תמלול</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -124,6 +137,16 @@ export default function VapiEvents() {
                       <TableCell className="text-sm">
                         {dur > 0 ? `${Math.floor(dur / 60)}:${String(dur % 60).padStart(2, '0')}` : '—'}
                       </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const log = callLogMap[e.call_id];
+                          return (log?.transcript || log?.transcript_json) ? (
+                            <Button size="sm" variant="ghost" onClick={() => setViewing(log)}>
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          ) : '—';
+                        })()}
+                      </TableCell>
                     </TableRow>
                   );
                 })}
@@ -133,6 +156,14 @@ export default function VapiEvents() {
           {filtered.length > 100 && <p className="text-center text-sm text-muted-foreground mt-4">מציג 100 מתוך {filtered.length}</p>}
         </CardContent>
       </Card>
+      <Dialog open={!!viewing} onOpenChange={() => setViewing(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>תמלול שיחה – {viewing?.contact_name || viewing?.contact_phone || 'לא ידוע'}</DialogTitle>
+          </DialogHeader>
+          <TranscriptViewer transcriptJson={viewing?.transcript_json} transcriptText={viewing?.transcript} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
