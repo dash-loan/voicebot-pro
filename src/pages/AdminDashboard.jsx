@@ -245,9 +245,9 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
           { to: '/admin/clients', icon: Users, label: 'לקוחות' },
-          { to: '/admin/campaigns', icon: PhoneCall, label: 'קמפיינים' },
+          { to: '/campaigns', icon: PhoneCall, label: 'קמפיינים' },
           { to: '/admin/scripts', icon: FileText, label: 'תסריטים' },
-          { to: '/admin/scripts', icon: Mic, label: 'בונה קול' },
+          { to: '/admin/scripts/new', icon: Mic, label: 'בונה קול' },
           { to: '/admin/numbers', icon: Phone, label: 'מספרים' },
           { to: '/admin/profitability', icon: TrendingUp, label: 'רווחיות' },
         ].map(a => (

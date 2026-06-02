@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Plus, Lock, Unlock, CreditCard, Search } from 'lucide-react';
+import { Plus, Lock, Unlock, CreditCard, Search, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -29,11 +29,6 @@ export default function ClientManagement() {
   const { data: clientMinutes = [] } = useQuery({
     queryKey: ['clientMinutes'],
     queryFn: () => base44.entities.ClientMinutes.list()
-  });
-
-  const { data: callLogs = [] } = useQuery({
-    queryKey: ['allCallLogs'],
-    queryFn: () => base44.entities.CallLog.list()
   });
 
   const toggleStatus = useMutation({
@@ -100,25 +95,17 @@ export default function ClientManagement() {
 
   const getClientStats = (clientId) => {
     const cm = clientMinutes.find(c => c.client_id === clientId);
-    const logs = callLogs.filter(l => l.client_id === clientId);
-    const monthLogs = logs.filter(l => {
-      const d = new Date(l.created_date);
-      const now = new Date();
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    });
-    const monthMinutes = Math.round(monthLogs.reduce((s, l) => s + (l.duration || 0), 0) / 60);
-    const totalMinutes = Math.round(logs.reduce((s, l) => s + (l.duration || 0), 0) / 60);
     return {
-      remaining: (cm?.total_minutes || 0) - (cm?.used_minutes || 0),
-      monthUsed: monthMinutes,
-      totalUsed: totalMinutes
+      remaining: cm?.remaining_minutes ?? Math.max(0, (cm?.total_minutes || 0) - (cm?.used_minutes || 0)),
+      monthUsed: Math.round(cm?.monthly_used_minutes || 0),
+      totalUsed: Math.round(cm?.used_minutes || 0)
     };
   };
 
   const activeUsers = users.filter(u => u.status !== 'blocked').length;
   const noMinutesUsers = users.filter(u => {
     const cm = clientMinutes.find(c => c.client_id === u.id);
-    return !cm || (cm.total_minutes - cm.used_minutes) <= 0;
+    return !cm || (cm.remaining_minutes ?? (cm.total_minutes - cm.used_minutes)) <= 0;
   }).length;
   const totalMinutesRemaining = clientMinutes.reduce((s, cm) => s + Math.max(0, (cm.total_minutes || 0) - (cm.used_minutes || 0)), 0);
 
@@ -192,8 +179,8 @@ export default function ClientManagement() {
                   <TableHead>לקוח</TableHead>
                   <TableHead>סטטוס</TableHead>
                   <TableHead>דקות נותרו</TableHead>
-                  <TableHead>החודש</TableHead>
-                  <TableHead>סה״כ</TableHead>
+                  <TableHead>שומשו החודש</TableHead>
+                  <TableHead>שומשו סה״כ</TableHead>
                   <TableHead>פעולות</TableHead>
                 </TableRow>
               </TableHeader>

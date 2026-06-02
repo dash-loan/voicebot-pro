@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
-import { Zap, Phone, DollarSign, CheckCircle, XCircle, Link } from 'lucide-react';
+import { Zap, Phone, DollarSign, CheckCircle, XCircle, ExternalLink } from 'lucide-react';
 import { checkVapiConnection } from '@/functions/checkVapiConnection';
 
 export default function SystemSettings() {
@@ -104,7 +104,7 @@ export default function SystemSettings() {
           {testResult === 'error' && <p className="text-red-600 text-sm flex items-center gap-1"><XCircle className="w-4 h-4" /> {testResultMsg}</p>}
 
           <div className="mt-4 p-3 bg-muted rounded-lg space-y-1">
-            <p className="text-xs font-semibold flex items-center gap-1"><Link className="w-3 h-3" /> Webhook URL להכנסה ב-Vapi Dashboard:</p>
+            <p className="text-xs font-semibold flex items-center gap-1"><ExternalLink className="w-3 h-3" /> Webhook URL להכנסה ב-Vapi Dashboard:</p>
             <code className="text-xs text-blue-600 break-all block" dir="ltr">{webhookUrl}</code>
             <p className="text-xs text-muted-foreground">ב-Vapi: Settings → Webhooks → הדבק את ה-URL → סמן אירועים: call-started, end-of-call-report</p>
           </div>
