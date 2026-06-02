@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,27 +27,31 @@ export default function VapiEvents() {
   const { data: events = [], isLoading, refetch, isFetching } = useQuery({
     queryKey: ['vapiWebhookEvents'],
     queryFn: () => base44.entities.VapiWebhookEvents.list('-created_date', 200),
-    refetchInterval: 30000,
+    refetchInterval: 60000,
+    staleTime: 30000,
   });
 
   const { data: callLogs = [] } = useQuery({
     queryKey: ['callLogsAdmin'],
-    queryFn: () => base44.entities.CallLog.list('-created_date', 500),
-    refetchInterval: 30000,
+    queryFn: () => base44.entities.CallLog.filter({ transcript: { $exists: true } }, '-created_date', 200),
+    refetchInterval: 60000,
+    staleTime: 30000,
   });
 
-  // Build a map: vapiCallId → callLog for transcript lookup
-  const callLogMap = Object.fromEntries(callLogs.map(l => [l.vapi_call_id, l]));
+  const callLogMap = useMemo(
+    () => Object.fromEntries(callLogs.map(l => [l.vapi_call_id, l])),
+    [callLogs]
+  );
 
-  const filtered = events.filter(e => {
+  const filtered = useMemo(() => events.filter(e => {
     if (eventFilter !== 'all' && e.event !== eventFilter) return false;
     if (dateFilter && e.received_at && !e.received_at.startsWith(dateFilter)) return false;
     return true;
-  });
+  }), [events, eventFilter, dateFilter]);
 
-  const started = events.filter(e => e.event === 'call.started').length;
+  const started = useMemo(() => events.filter(e => e.event === 'call.started').length, [events]);
   const ended = callLogs.length;
-  const failed = events.filter(e => e.event === 'call.failed').length;
+  const failed = useMemo(() => events.filter(e => e.event === 'call.failed').length, [events]);
 
   return (
     <div className="space-y-6">
