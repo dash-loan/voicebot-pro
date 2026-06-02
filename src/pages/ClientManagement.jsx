@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { Plus, Lock, Unlock, CreditCard, Search, Clock } from 'lucide-react';
+import { Plus, Lock, Unlock, Package, Search } from 'lucide-react';
+import ClientPackagesDialog from '@/components/ClientPackagesDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+
 import { useToast } from '@/components/ui/use-toast';
 
 export default function ClientManagement() {
@@ -16,10 +18,9 @@ export default function ClientManagement() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [minutesOpen, setMinutesOpen] = useState(false);
+  const [packagesOpen, setPackagesOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [minutesToAdd, setMinutesToAdd] = useState('');
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['users'],
@@ -57,35 +58,7 @@ export default function ClientManagement() {
     }
   });
 
-  const addMinutes = useMutation({
-    mutationFn: async ({ clientId, amount }) => {
-      const existing = clientMinutes.find(cm => cm.client_id === clientId);
-      if (existing) {
-        await base44.entities.ClientMinutes.update(existing.id, {
-          total_minutes: (existing.total_minutes || 0) + amount
-        });
-      } else {
-        await base44.entities.ClientMinutes.create({
-          client_id: clientId,
-          total_minutes: amount,
-          used_minutes: 0
-        });
-      }
-      await base44.entities.MinutesTransaction.create({
-        client_id: clientId,
-        amount,
-        type: 'add',
-        description: 'הוספת דקות ע״י מנהל'
-      });
-    },
-    onSuccess: () => {
-      setMinutesOpen(false);
-      setMinutesToAdd('');
-      setSelectedClient(null);
-      queryClient.invalidateQueries({ queryKey: ['clientMinutes'] });
-      toast({ title: 'הדקות נוספו בהצלחה' });
-    }
-  });
+
 
   const filteredUsers = users.filter(u => 
     u.full_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -209,8 +182,8 @@ export default function ClientManagement() {
                           <Button size="sm" variant="outline" onClick={() => toggleStatus.mutate(user)}>
                             {user.status === 'active' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => { setSelectedClient(user); setMinutesOpen(true); }}>
-                            <CreditCard className="w-4 h-4" />
+                          <Button size="sm" variant="outline" onClick={() => { setSelectedClient(user); setPackagesOpen(true); }}>
+                            <Package className="w-4 h-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -223,23 +196,11 @@ export default function ClientManagement() {
         </CardContent>
       </Card>
 
-      <Dialog open={minutesOpen} onOpenChange={setMinutesOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>הוספת דקות - {selectedClient?.full_name || selectedClient?.email}</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>כמות דקות להוספה</Label>
-              <Input type="number" value={minutesToAdd} onChange={e => setMinutesToAdd(e.target.value)} placeholder="500" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setMinutesOpen(false)}>ביטול</Button>
-            <Button onClick={() => addMinutes.mutate({ clientId: selectedClient.id, amount: parseInt(minutesToAdd) })} disabled={!minutesToAdd || addMinutes.isPending}>
-              {addMinutes.isPending ? 'מוסיף...' : 'הוסף דקות'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ClientPackagesDialog
+        client={selectedClient}
+        open={packagesOpen}
+        onOpenChange={setPackagesOpen}
+      />
     </div>
   );
 }

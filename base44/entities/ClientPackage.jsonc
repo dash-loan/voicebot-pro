@@ -1,0 +1,42 @@
+{
+  "name": "ClientPackage",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "title": "\u05de\u05d6\u05d4\u05d4 \u05dc\u05e7\u05d5\u05d7"
+    },
+    "package_name": {
+      "type": "string",
+      "title": "\u05e9\u05dd \u05d7\u05d1\u05d9\u05dc\u05d4"
+    },
+    "minutes": {
+      "type": "number",
+      "title": "\u05d3\u05e7\u05d5\u05ea \u05d1\u05d7\u05d1\u05d9\u05dc\u05d4",
+      "default": 0
+    },
+    "price_ils": {
+      "type": "number",
+      "title": "\u05de\u05d7\u05d9\u05e8 \u20aa",
+      "default": 0
+    },
+    "notes": {
+      "type": "string",
+      "title": "\u05d4\u05e2\u05e8\u05d5\u05ea"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "expired"
+      ],
+      "default": "active",
+      "title": "\u05e1\u05d8\u05d8\u05d5\u05e1"
+    }
+  },
+  "required": [
+    "client_id",
+    "minutes",
+    "price_ils"
+  ]
+}
