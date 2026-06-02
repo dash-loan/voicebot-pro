@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
 import { Users, Clock, PhoneCall, TrendingUp, ArrowLeft, FileText, Mic, Phone, DollarSign, Flame, BarChart2, Settings } from 'lucide-react';
@@ -26,70 +27,88 @@ const QUALITY_LABELS = {
 };
 
 export default function AdminDashboard() {
-  const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: () => base44.entities.User.filter({ role: 'user' }) });
-  const { data: clientMinutes = [] } = useQuery({ queryKey: ['clientMinutes'], queryFn: () => base44.entities.ClientMinutes.list() });
-  const { data: campaigns = [] } = useQuery({ queryKey: ['allCampaigns'], queryFn: () => base44.entities.Campaign.list() });
-  const { data: scripts = [] } = useQuery({ queryKey: ['scripts'], queryFn: () => base44.entities.Script.list() });
-  const { data: callLogs = [] } = useQuery({ queryKey: ['allCallLogs'], queryFn: () => base44.entities.CallLog.list() });
-  const { data: vapiConfigs = [] } = useQuery({ queryKey: ['vapiConfigs'], queryFn: () => base44.entities.VapiConfig.list() });
-  const { data: numbers = [] } = useQuery({ queryKey: ['virtualNumbers'], queryFn: () => base44.entities.VirtualNumber.list() });
+  const STALE = { staleTime: 60000, refetchInterval: false };
+
+  const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: () => base44.entities.User.filter({ role: 'user' }), ...STALE });
+  const { data: campaigns = [] } = useQuery({ queryKey: ['allCampaigns'], queryFn: () => base44.entities.Campaign.list(), ...STALE });
+  const { data: scripts = [] } = useQuery({ queryKey: ['scripts'], queryFn: () => base44.entities.Script.list(), ...STALE });
+  const { data: callLogs = [] } = useQuery({ queryKey: ['allCallLogs'], queryFn: () => base44.entities.CallLog.list('-created_date', 500), ...STALE });
+  const { data: vapiConfigs = [] } = useQuery({ queryKey: ['vapiConfigs'], queryFn: () => base44.entities.VapiConfig.list(), ...STALE });
+  const { data: numbers = [] } = useQuery({ queryKey: ['virtualNumbers'], queryFn: () => base44.entities.VirtualNumber.list(), ...STALE });
 
   const vapiConfig = vapiConfigs[0] || {};
   const sellPriceILS = vapiConfig.sell_price_per_minute_ils || 0.7;
   const USD_TO_ILS = 3.7;
-
-  // KPIs
   const now = new Date();
-  const thisMonthLogs = callLogs.filter(l => {
-    const d = new Date(l.created_date || 0);
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  });
-  const monthMinutes = thisMonthLogs.reduce((s, l) => s + (l.active_duration_seconds || 0), 0) / 60;
-  const revenueILS = monthMinutes * sellPriceILS;
-  const costUSD = thisMonthLogs.reduce((s, l) => s + (l.vapi_cost || 0), 0);
-  const costILS = costUSD * USD_TO_ILS;
-  const profitILS = revenueILS - costILS;
-  const profitPct = revenueILS > 0 ? Math.round((profitILS / revenueILS) * 100) : 0;
-  const hotLeads = callLogs.filter(l => l.lead_quality === 'hot_lead').length;
-  const activeCampaigns = campaigns.filter(c => c.status === 'active').length;
 
-  // Monthly chart data (last 6 months)
-  const monthlyData = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const monthLogs = callLogs.filter(l => {
-      const ld = new Date(l.created_date || 0);
-      return ld.getMonth() === d.getMonth() && ld.getFullYear() === d.getFullYear();
+  const stats = useMemo(() => {
+    const thisMonth = now.getMonth();
+    const thisYear = now.getFullYear();
+
+    const thisMonthLogs = callLogs.filter(l => {
+      const d = new Date(l.created_date || 0);
+      return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
     });
-    const mMins = monthLogs.reduce((s, l) => s + (l.active_duration_seconds || 0), 0) / 60;
-    const mRev = Math.round(mMins * sellPriceILS);
-    const mCost = Math.round(monthLogs.reduce((s, l) => s + (l.vapi_cost || 0), 0) * USD_TO_ILS);
-    monthlyData.push({
-      name: format(d, 'MMM', { locale: he }),
-      'הכנסות ₪': mRev,
-      'עלויות ₪': mCost,
+
+    const monthMinutes = thisMonthLogs.reduce((s, l) => s + (l.active_duration_seconds || 0), 0) / 60;
+    const revenueILS = monthMinutes * sellPriceILS;
+    const costUSD = thisMonthLogs.reduce((s, l) => s + (l.vapi_cost || 0), 0);
+    const costILS = costUSD * USD_TO_ILS;
+    const profitILS = revenueILS - costILS;
+    const profitPct = revenueILS > 0 ? Math.round((profitILS / revenueILS) * 100) : 0;
+    const hotLeads = callLogs.filter(l => l.lead_quality === 'hot_lead').length;
+    const activeCampaigns = campaigns.filter(c => c.status === 'active').length;
+
+    // Monthly chart (last 6 months) — single pass bucket
+    const buckets = {};
+    callLogs.forEach(l => {
+      const d = new Date(l.created_date || 0);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      if (!buckets[key]) buckets[key] = { mins: 0, costUSD: 0 };
+      buckets[key].mins += (l.active_duration_seconds || 0) / 60;
+      buckets[key].costUSD += l.vapi_cost || 0;
     });
-  }
+    const monthlyData = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      const b = buckets[key] || { mins: 0, costUSD: 0 };
+      monthlyData.push({
+        name: format(d, 'MMM', { locale: he }),
+        'הכנסות ₪': Math.round(b.mins * sellPriceILS),
+        'עלויות ₪': Math.round(b.costUSD * USD_TO_ILS),
+      });
+    }
 
-  // Lead quality pie
-  const qualityCounts = {};
-  callLogs.forEach(l => {
-    const q = l.lead_quality || 'unqualified';
-    qualityCounts[q] = (qualityCounts[q] || 0) + 1;
-  });
-  const pieData = Object.entries(qualityCounts)
-    .filter(([, v]) => v > 0)
-    .map(([k, v]) => ({ name: QUALITY_LABELS[k] || k, value: v, key: k }));
+    // Lead quality pie — single pass
+    const qualityCounts = {};
+    callLogs.forEach(l => {
+      const q = l.lead_quality || 'unqualified';
+      qualityCounts[q] = (qualityCounts[q] || 0) + 1;
+    });
+    const pieData = Object.entries(qualityCounts)
+      .filter(([, v]) => v > 0)
+      .map(([k, v]) => ({ name: QUALITY_LABELS[k] || k, value: v, key: k }));
 
-  // Client profitability
-  const clientProfit = users.map(u => {
-    const logs = callLogs.filter(l => l.client_id === u.id);
-    const mins = logs.reduce((s, l) => s + (l.active_duration_seconds || 0), 0) / 60;
-    const rev = mins * sellPriceILS;
-    const cost = logs.reduce((s, l) => s + (l.vapi_cost || 0), 0) * USD_TO_ILS;
-    const hot = logs.filter(l => l.lead_quality === 'hot_lead').length;
-    return { ...u, rev: Math.round(rev), cost: Math.round(cost), profit: Math.round(rev - cost), hotLeads: hot, totalCalls: logs.length };
-  }).sort((a, b) => b.profit - a.profit);
+    // Client profitability — single pass grouping
+    const logsByClient = {};
+    callLogs.forEach(l => {
+      if (!logsByClient[l.client_id]) logsByClient[l.client_id] = [];
+      logsByClient[l.client_id].push(l);
+    });
+    const clientProfit = users.map(u => {
+      const logs = logsByClient[u.id] || [];
+      const mins = logs.reduce((s, l) => s + (l.active_duration_seconds || 0), 0) / 60;
+      const rev = mins * sellPriceILS;
+      const cost = logs.reduce((s, l) => s + (l.vapi_cost || 0), 0) * USD_TO_ILS;
+      const hot = logs.filter(l => l.lead_quality === 'hot_lead').length;
+      return { ...u, rev: Math.round(rev), cost: Math.round(cost), profit: Math.round(rev - cost), hotLeads: hot, totalCalls: logs.length };
+    }).sort((a, b) => b.profit - a.profit);
+
+    return { monthMinutes, revenueILS, costUSD, costILS, profitILS, profitPct, hotLeads, activeCampaigns, monthlyData, pieData, clientProfit };
+  }, [callLogs, campaigns, users, sellPriceILS]);
+
+  const { monthMinutes, revenueILS, costUSD, costILS, profitILS, profitPct, hotLeads, activeCampaigns, monthlyData, pieData, clientProfit } = stats;
 
   const kpis = [
     { label: 'הכנסות החודש', value: `₪${Math.round(revenueILS).toLocaleString()}`, sub: `${Math.round(monthMinutes)} דקות`, color: 'text-blue-900', bg: 'bg-blue-50 border-blue-200', icon: DollarSign },
