@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { vapiCreateAssistant, vapiUpdateAssistant } from '@/utils/vapiClient';
-import { Save, ArrowRight, Bot, CheckCircle2, AlertCircle, PhoneCall, Loader2 } from 'lucide-react';
+import { vapiCreateAssistant, vapiUpdateAssistant, vapiListAssistants } from '@/utils/vapiClient';
+import { Save, ArrowRight, Bot, CheckCircle2, AlertCircle, PhoneCall, Loader2, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -51,6 +51,12 @@ export default function ScriptBuilder() {
 
   const apiKey = vapiConfigs[0]?.vapi_api_key;
 
+  const { data: vapiAssistants = [], isLoading: loadingAssistants } = useQuery({
+    queryKey: ['vapiAssistants', apiKey],
+    queryFn: () => vapiListAssistants({ apiKey }),
+    enabled: !!apiKey,
+  });
+
   const validate = () => {
     if (!form.name.trim()) return 'נא להזין שם תסריט';
     if (!form.system_prompt.trim()) return 'נא להזין System Prompt';
@@ -66,25 +72,27 @@ export default function ScriptBuilder() {
 
       let vapiAssistantId = form.vapi_assistant_id;
 
-      // Create or update assistant in Vapi
-      if (vapiAssistantId) {
-        await vapiUpdateAssistant({
-          apiKey,
-          assistantId: vapiAssistantId,
-          name: form.name,
-          systemPrompt: form.system_prompt,
-          firstMessage: form.first_message,
-          language: form.language,
-        });
-      } else {
-        const vapiResult = await vapiCreateAssistant({
-          apiKey,
-          name: form.name,
-          systemPrompt: form.system_prompt,
-          firstMessage: form.first_message,
-          language: form.language,
-        });
-        vapiAssistantId = vapiResult.id;
+      // If system_prompt filled → sync to Vapi. If assistant already linked but no prompt, just save link.
+      if (form.system_prompt.trim()) {
+        if (vapiAssistantId) {
+          await vapiUpdateAssistant({
+            apiKey,
+            assistantId: vapiAssistantId,
+            name: form.name,
+            systemPrompt: form.system_prompt,
+            firstMessage: form.first_message,
+            language: form.language,
+          });
+        } else {
+          const vapiResult = await vapiCreateAssistant({
+            apiKey,
+            name: form.name,
+            systemPrompt: form.system_prompt,
+            firstMessage: form.first_message,
+            language: form.language,
+          });
+          vapiAssistantId = vapiResult.id;
+        }
       }
 
       const scriptData = {
@@ -220,6 +228,32 @@ export default function ScriptBuilder() {
               <Label>תיאור (פנימי)</Label>
               <Textarea value={form.description || ''} onChange={e => set('description', e.target.value)} placeholder="הערות פנימיות..." rows={2} />
             </div>
+            <div className="space-y-2 pt-2 border-t">
+              <Label className="flex items-center gap-2"><Link2 className="w-4 h-4" /> שייך ל-Vapi Assistant קיים</Label>
+              <Select
+                value={form.vapi_assistant_id || '_none'}
+                onValueChange={v => set('vapi_assistant_id', v === '_none' ? '' : v)}
+                disabled={loadingAssistants || !apiKey}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingAssistants ? 'טוען מ-Vapi...' : 'בחר Assistant'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— ללא שיוך —</SelectItem>
+                  {vapiAssistants.map(a => (
+                    <SelectItem key={a.id} value={a.id}>
+                      <span className="font-medium">{a.name}</span>
+                      <span className="text-xs text-muted-foreground mr-2 font-mono">({a.id.slice(0, 8)}...)</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {form.vapi_assistant_id && (
+                <p className="text-xs text-green-600 font-mono">{form.vapi_assistant_id}</p>
+              )}
+              {!apiKey && <p className="text-xs text-muted-foreground">נדרש Vapi API Key בהגדרות המערכת</p>}
+            </div>
+
             <div className="flex items-center justify-between pt-2 border-t">
               <Label>תסריט פעיל</Label>
               <Switch checked={form.status === 'active'} onCheckedChange={v => set('status', v ? 'active' : 'draft')} />

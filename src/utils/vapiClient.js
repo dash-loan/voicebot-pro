@@ -142,6 +142,14 @@ export async function vapiUpdateAssistant({ apiKey, assistantId, name, systemPro
 }
 
 /**
+ * List all Vapi Assistants.
+ * Uses private apiKey — admin only.
+ */
+export async function vapiListAssistants({ apiKey }) {
+  return vapiRequest({ key: apiKey, method: 'GET', path: '/assistant?limit=100' });
+}
+
+/**
  * Delete a Vapi Assistant.
  * Uses private apiKey — admin only.
  */
