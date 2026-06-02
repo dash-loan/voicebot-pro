@@ -27,22 +27,15 @@ Deno.serve(async (req) => {
     if (!phoneNumberId) return Response.json({ error: 'Phone Number ID לא מוגדר — שייך מספר וירטואלי לקמפיין' }, { status: 400 });
 
     // Check client minutes
-    const minutesList2 = await base44.asServiceRole.entities.ClientMinutes.filter({ client_id: campaign.client_id });
-    const cm = minutesList2[0];
-    if (!cm || (cm.remaining_minutes || 0) <= 0) {
+    const minutesList = await base44.asServiceRole.entities.ClientMinutes.filter({ client_id: campaign.client_id });
+    const clientMinutes = minutesList[0];
+    if (!clientMinutes || (clientMinutes.remaining_minutes || 0) <= 0) {
       return Response.json({ error: 'אין דקות זמינות — יש לצור קשר עם מנהל התיק לרכישת דקות נוספות', frozen: true }, { status: 402 });
     }
 
-    // Determine assistant ID (use campaign override or default Hebrew)
+    // Determine assistant ID (use campaign override or default)
     const assistantId = campaign.vapi_assistant_id || config.vapi_assistant_id;
     if (!assistantId) return Response.json({ error: 'Vapi Assistant ID לא מוגדר' }, { status: 400 });
-
-    // Check client minutes
-    const minutesList = await base44.asServiceRole.entities.ClientMinutes.filter({ client_id: campaign.client_id });
-    const clientMinutes = minutesList[0];
-    if (!clientMinutes || clientMinutes.remaining_minutes <= 0) {
-      return Response.json({ error: 'אין מספיק דקות בבנק הלקוח' }, { status: 400 });
-    }
 
     // Check dialing hours
     const now = new Date();
@@ -80,8 +73,8 @@ Deno.serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            assistantId,
-            phoneNumberId: config.vapi_phone_number_id,
+          assistantId,
+          phoneNumberId,
             customer: {
               number: contact.phone,
               name: contact.name,
