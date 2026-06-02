@@ -55,28 +55,51 @@ export default function RelevantContacts() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [qualityFilter, setQualityFilter] = useState('all');
   const [campaignFilter, setCampaignFilter] = useState('all');
+  const [clientFilter, setClientFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('');
   const [search, setSearch] = useState('');
   const [viewing, setViewing] = useState(null);
 
   const { data: user } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
+  const isAdmin = user?.role === 'admin';
 
   const { data: callLogs = [], isLoading } = useQuery({
-    queryKey: ['myCallLogs', user?.id],
-    queryFn: () => base44.entities.CallLog.filter({ client_id: user?.id }, '-created_date'),
+    queryKey: ['callLogs', user?.id, isAdmin],
+    queryFn: () => isAdmin
+      ? base44.entities.CallLog.list('-created_date', 500)
+      : base44.entities.CallLog.filter({ client_id: user?.id }, '-created_date'),
     enabled: !!user?.id,
   });
 
   const { data: campaigns = [] } = useQuery({
-    queryKey: ['myCampaigns', user?.id],
-    queryFn: () => base44.entities.Campaign.filter({ client_id: user?.id }),
+    queryKey: ['campaigns', user?.id, isAdmin],
+    queryFn: () => isAdmin
+      ? base44.entities.Campaign.list()
+      : base44.entities.Campaign.filter({ client_id: user?.id }),
     enabled: !!user?.id,
   });
+
+  const { data: allUsers = [] } = useQuery({
+    queryKey: ['allUsers'],
+    queryFn: () => base44.entities.User.list(),
+    enabled: isAdmin,
+  });
+
+  const { data: scripts = [] } = useQuery({
+    queryKey: ['allScripts'],
+    queryFn: () => base44.entities.Script.list(),
+    enabled: isAdmin,
+  });
+
+  const userMap = Object.fromEntries(allUsers.map(u => [u.id, u.full_name || u.email]));
+  const scriptMap = Object.fromEntries(scripts.map(s => [s.id, s.name]));
+  const campaignScriptMap = Object.fromEntries(campaigns.map(c => [c.id, c.script_id]));
 
   const filtered = callLogs.filter(l => {
     if (statusFilter !== 'all' && l.status !== statusFilter) return false;
     if (qualityFilter !== 'all' && l.lead_quality !== qualityFilter) return false;
     if (campaignFilter !== 'all' && l.campaign_id !== campaignFilter) return false;
+    if (clientFilter !== 'all' && l.client_id !== clientFilter) return false;
     if (dateFilter && l.created_date && !l.created_date.startsWith(dateFilter)) return false;
     if (search && !l.contact_name?.includes(search) && !l.contact_phone?.includes(search)) return false;
     return true;
@@ -145,6 +168,15 @@ export default function RelevantContacts() {
                 {campaigns.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            {isAdmin && (
+              <Select value={clientFilter} onValueChange={setClientFilter}>
+                <SelectTrigger className="w-full md:w-44"><SelectValue placeholder="לקוח" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">כל הלקוחות</SelectItem>
+                  {allUsers.filter(u => u.role !== 'admin').map(u => <SelectItem key={u.id} value={u.id}>{u.full_name || u.email}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
             <Input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="w-full md:w-40" />
           </div>
         </CardHeader>
@@ -160,6 +192,8 @@ export default function RelevantContacts() {
                   <TableHead>שם</TableHead>
                   <TableHead>טלפון</TableHead>
                   <TableHead>קמפיין</TableHead>
+                  {isAdmin && <TableHead>לקוח</TableHead>}
+                  {isAdmin && <TableHead>תסריט</TableHead>}
                   <TableHead>סטטוס</TableHead>
                   <TableHead>איכות ליד</TableHead>
                   <TableHead>משך</TableHead>
@@ -173,6 +207,8 @@ export default function RelevantContacts() {
                     <TableCell className="font-medium">{log.contact_name || '-'}</TableCell>
                     <TableCell className="font-mono" dir="ltr">{log.contact_phone ? formatIsraeliPhone(log.contact_phone) : '-'}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{log.campaign_name || '-'}</TableCell>
+                    {isAdmin && <TableCell className="text-sm text-muted-foreground">{userMap[log.client_id] || '-'}</TableCell>}
+                    {isAdmin && <TableCell className="text-sm text-muted-foreground">{scriptMap[campaignScriptMap[log.campaign_id]] || '-'}</TableCell>}
                     <TableCell><Badge variant={STATUS[log.status]?.color}>{STATUS[log.status]?.label || log.status}</Badge></TableCell>
                     <TableCell>
                       {log.lead_quality && QUALITY[log.lead_quality] ? (
