@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
@@ -35,8 +36,20 @@ export default function AllCampaigns() {
   });
   const { data: callLogs = [] } = useQuery({
     queryKey: ['allCallLogs'],
-    queryFn: () => base44.entities.CallLog.list(),
+    queryFn: () => base44.entities.CallLog.list('-created_date', 500),
+    staleTime: 60000,
   });
+
+  // Pre-index hot leads by campaign — O(n) once instead of O(n) per row
+  const hotLeadsByCampaign = useMemo(() => {
+    const map = {};
+    callLogs.forEach(l => {
+      if (l.lead_quality === 'hot_lead') {
+        map[l.campaign_id] = (map[l.campaign_id] || 0) + 1;
+      }
+    });
+    return map;
+  }, [callLogs]);
 
   const toggle = useMutation({
     mutationFn: (c) => base44.entities.Campaign.update(c.id, {
@@ -48,13 +61,12 @@ export default function AllCampaigns() {
     },
   });
 
-  const getClientName = (id) => {
-    const u = users.find(u => u.id === id);
-    return u ? (u.full_name || u.email) : '—';
-  };
+  const userMap = useMemo(() =>
+    Object.fromEntries(users.map(u => [u.id, u.full_name || u.email])),
+    [users]
+  );
 
-  const getCampaignHotLeads = (cid) =>
-    callLogs.filter(l => l.campaign_id === cid && l.lead_quality === 'hot_lead').length;
+  const getClientName = (id) => userMap[id] || '—';
 
   const filtered = campaigns
     .filter(c => clientFilter === 'all' || c.client_id === clientFilter)
@@ -111,7 +123,7 @@ export default function AllCampaigns() {
               <TableBody>
                 {filtered.map(c => {
                   const progress = c.total_contacts > 0 ? Math.round((c.dialed_contacts / c.total_contacts) * 100) : 0;
-                  const hotLeads = getCampaignHotLeads(c.id);
+                  const hotLeads = hotLeadsByCampaign[c.id] || 0;
                   const s = STATUS[c.status] || STATUS.draft;
                   return (
                     <TableRow key={c.id} className="hover:bg-muted/30">
