@@ -6,7 +6,7 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { email, appUrl } = await req.json();
+    const { email, password, appUrl } = await req.json();
 
     const html = `
 <!DOCTYPE html>
@@ -87,6 +87,28 @@ Deno.serve(async (req) => {
                   כניסה למערכת ←
                 </a>
               </div>
+
+              <!-- Credentials Box -->
+              ${password ? `
+              <div style="background:#0d1f3c;border-radius:12px;padding:20px 24px;border:1px solid #f5c518;margin-bottom:24px;">
+                <p style="color:#f5c518;font-size:14px;font-weight:700;margin:0 0 12px 0;text-align:center;">פרטי כניסה למערכת</p>
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:6px 0;">
+                      <span style="color:#94a3b8;font-size:14px;">אימייל: </span>
+                      <span style="color:#ffffff;font-size:14px;font-weight:600;">${email}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:6px 0;">
+                      <span style="color:#94a3b8;font-size:14px;">סיסמה: </span>
+                      <span style="color:#f5c518;font-size:14px;font-weight:700;letter-spacing:2px;">${password}</span>
+                    </td>
+                  </tr>
+                </table>
+                <p style="color:#64748b;font-size:12px;margin:12px 0 0 0;text-align:center;">מומלץ לשנות את הסיסמה לאחר הכניסה הראשונה</p>
+              </div>
+              ` : ''}
 
               <!-- Note -->
               <div style="background:#0f1629;border-radius:12px;padding:16px 20px;border:1px solid #2d3a5a;">

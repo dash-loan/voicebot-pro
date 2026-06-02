@@ -2,9 +2,10 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useState } from 'react';
-import { LayoutDashboard, Users, FileText, Phone, Megaphone, BarChart3, LogOut, Menu, Activity, TrendingUp, Settings, Flame, PhoneCall, CalendarDays, Bot } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, Phone, Megaphone, BarChart3, LogOut, Menu, Activity, TrendingUp, Settings, Flame, PhoneCall, CalendarDays, Bot, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import BlockedUserScreen from '@/components/BlockedUserScreen';
+import ChangePasswordDialog from '@/components/ChangePasswordDialog';
 
 const adminLinks = [
   { to: '/admin', icon: LayoutDashboard, label: 'דשבורד' },
@@ -33,6 +34,7 @@ export default function Layout() {
   const { data: user } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   
   if (user?.status === 'blocked') return <BlockedUserScreen />;
 
@@ -75,11 +77,18 @@ export default function Layout() {
         
         <div className="p-4 border-t border-sidebar-border">
           <div className="text-sm text-sidebar-foreground/60 mb-2 px-4 truncate">{user?.full_name || user?.email}</div>
+          {user?.role !== 'admin' && (
+            <button onClick={() => setChangePasswordOpen(true)} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-all w-full">
+              <KeyRound className="w-5 h-5" />
+              שינוי סיסמה
+            </button>
+          )}
           <button onClick={handleLogout} className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-red-400 transition-all w-full">
             <LogOut className="w-5 h-5" />
             התנתקות
           </button>
         </div>
+        <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
       </aside>
       
       <main className="flex-1 overflow-auto">

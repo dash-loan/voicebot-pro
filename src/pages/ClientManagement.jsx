@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { Plus, Lock, Unlock, Package, Search } from 'lucide-react';
 import ClientPackagesDialog from '@/components/ClientPackagesDialog';
 import { sendWelcomeEmail } from '@/functions/sendWelcomeEmail';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +23,7 @@ export default function ClientManagement() {
   const [packagesOpen, setPackagesOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [invitePassword, setInvitePassword] = useState('');
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['users'],
@@ -45,20 +47,18 @@ export default function ClientManagement() {
   });
 
   const inviteClient = useMutation({
-    mutationFn: async (email) => {
+    mutationFn: async ({ email, password }) => {
+      // שליחת מייל ברכה עם הסיסמה + קישור כניסה
+      await sendWelcomeEmail({ email, password, appUrl: window.location.origin });
+      // הזמנה רשמית דרך Base44 (יצירת המשתמש במערכת)
       await base44.users.inviteUser(email, 'user');
-      // שליחת מייל ברכה מעוצב נוסף
-      try {
-        await sendWelcomeEmail({ email, appUrl: window.location.origin });
-      } catch (_) {
-        // לא לחסום אם המייל הנוסף נכשל
-      }
     },
     onSuccess: () => {
       setInviteOpen(false);
       setInviteEmail('');
+      setInvitePassword('');
       queryClient.invalidateQueries({ queryKey: ['users'] });
-      toast({ title: '✅ ההזמנה נשלחה בהצלחה', description: 'נשלח מייל ברכה מעוצב ללקוח' });
+      toast({ title: '✅ הלקוח הוזמן בהצלחה', description: 'נשלח מייל עם הסיסמה ללקוח' });
     },
     onError: (err) => {
       toast({ title: 'שגיאה', description: err.message, variant: 'destructive' });
@@ -107,10 +107,14 @@ export default function ClientManagement() {
                 <Label>אימייל</Label>
                 <Input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="client@example.com" />
               </div>
+              <div className="space-y-2">
+                <Label>סיסמה ראשונית</Label>
+                <Input type="password" value={invitePassword} onChange={e => setInvitePassword(e.target.value)} placeholder="לפחות 6 תווים" />
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setInviteOpen(false)}>ביטול</Button>
-              <Button onClick={() => inviteClient.mutate(inviteEmail)} disabled={!inviteEmail || inviteClient.isPending}>
+              <Button onClick={() => inviteClient.mutate({ email: inviteEmail, password: invitePassword })} disabled={!inviteEmail || !invitePassword || invitePassword.length < 6 || inviteClient.isPending}>
                 {inviteClient.isPending ? 'שולח...' : 'שלח הזמנה'}
               </Button>
             </DialogFooter>
