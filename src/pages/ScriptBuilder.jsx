@@ -128,6 +128,13 @@ export default function ScriptBuilder() {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const formatIsraeliPhone = (phone) => {
+    const digits = phone.replace(/\D/g, '');
+    if (digits.startsWith('972')) return `+${digits}`;
+    if (digits.startsWith('0')) return `+972${digits.slice(1)}`;
+    return phone;
+  };
+
   const handleTestCall = async () => {
     if (!testPhone.trim()) return;
     setTestCalling(true);
@@ -143,7 +150,7 @@ export default function ScriptBuilder() {
         body: JSON.stringify({
           assistantId: form.vapi_assistant_id,
           phoneNumberId,
-          customer: { number: testPhone.trim(), name: 'בדיקת תסריט' },
+          customer: { number: formatIsraeliPhone(testPhone.trim()), name: 'בדיקת תסריט' },
         }),
       });
       const data = await resp.json();
