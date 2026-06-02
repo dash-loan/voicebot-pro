@@ -65,10 +65,21 @@ export default function ClientDashboard() {
               </div>
               <div className="flex items-baseline gap-3 mb-3">
                 <span className="text-5xl font-bold text-primary">{Math.round(remainingMinutes).toLocaleString()}</span>
-                <span className="text-muted-foreground text-lg">/ {totalMinutes.toLocaleString()} דקות נותרו</span>
+                <span className="text-muted-foreground text-lg">דקות נותרו</span>
               </div>
               <Progress value={usagePercent} className="h-3" />
-              <p className="text-sm text-muted-foreground mt-2">{Math.round(usedMinutes).toLocaleString()} דקות שנוצלו ({Math.round(usagePercent)}%)</p>
+              <div className="flex items-center gap-6 mt-3 text-sm">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-primary/30 inline-block" />
+                  <span className="text-muted-foreground">נרכשו:</span>
+                  <span className="font-semibold">{Math.round(totalMinutes).toLocaleString()} דקות</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-primary inline-block" />
+                  <span className="text-muted-foreground">נוצלו:</span>
+                  <span className="font-semibold">{Math.round(usedMinutes).toLocaleString()} דקות ({Math.round(usagePercent)}%)</span>
+                </div>
+              </div>
             </div>
             <div className="flex flex-col gap-3 min-w-[180px]">
               <Link to="/campaigns">
